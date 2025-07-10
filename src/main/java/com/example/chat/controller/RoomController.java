@@ -1,5 +1,7 @@
 package com.example.chat.controller;
 
+import com.example.chat.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -7,7 +9,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 @RestController
-@RequestMapping("/api/rooms")
+@RequestMapping("/api")
 public class RoomController {
     // Потокобезопасное множество комнат
     private static final Set<String> rooms = new ConcurrentSkipListSet<>(String.CASE_INSENSITIVE_ORDER);
@@ -16,6 +18,9 @@ public class RoomController {
         // Добавим стандартные комнаты
         rooms.addAll(Arrays.asList("General", "Sports", "Music", "Programming", "Gaming", "News"));
     }
+
+    @Autowired
+    private UserService userService;
 
     @GetMapping
     public ResponseEntity<?> getRooms() {
@@ -49,5 +54,12 @@ public class RoomController {
         }
         rooms.remove(roomName);
         return ResponseEntity.ok("Room deleted");
+    }
+
+    // Новый endpoint для получения всех пользователей
+    @GetMapping("/users")
+    public ResponseEntity<?> getAllUsers() {
+        List<String> users = userService.getAllUsernames();
+        return ResponseEntity.ok(Map.of("users", users));
     }
 } 

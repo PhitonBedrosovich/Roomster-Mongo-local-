@@ -86,6 +86,26 @@ public class RoomService {
         });
     }
 
+    public static CompletableFuture<List<String>> getAllUsersAsync(String token) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/api/users"))
+                        .header("Authorization", "Bearer " + token)
+                        .GET()
+                        .build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    Map<String, Object> map = objectMapper.readValue(response.body(), Map.class);
+                    return (List<String>) map.get("users");
+                }
+                return List.of();
+            } catch (Exception e) {
+                return List.of();
+            }
+        });
+    }
+
     public static void getRooms(String token, Consumer<List<String>> onSuccess, Consumer<String> onError) {
         getRoomsAsync(token)
                 .thenAccept(rooms -> Platform.runLater(() -> onSuccess.accept(rooms)))

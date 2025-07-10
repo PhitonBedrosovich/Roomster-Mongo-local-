@@ -1,6 +1,7 @@
 package com.example.chat.frontend;
 
 import com.example.chat.frontend.service.NotificationService;
+import com.example.chat.frontend.service.RoomService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -19,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.concurrent.CompletableFuture;
 
 public class ChatView {
     private final BiConsumer<String, String> onSendMessage;
@@ -26,6 +28,7 @@ public class ChatView {
     private final ListView<UserItem> userList;
     private final String room;
     private final String currentUser;
+    private final String token;
     private VBox root;
     private TextField messageField;
     private ComboBox<String> recipientCombo;
@@ -33,13 +36,15 @@ public class ChatView {
     private Label roomLabel;
     private Label userCountLabel;
 
-    public ChatView(BiConsumer<String, String> onSendMessage, String room, String currentUser) {
+    public ChatView(BiConsumer<String, String> onSendMessage, String room, String currentUser, String token) {
         this.onSendMessage = onSendMessage;
         this.messageList = new ListView<>();
         this.userList = new ListView<>();
         this.room = room;
         this.currentUser = currentUser;
+        this.token = token;
         createUI();
+        loadAllUsers();
     }
 
     private void createUI() {
@@ -152,25 +157,34 @@ public class ChatView {
     public void updateMessages(List<Map<String, Object>> messages) {
         messageList.getItems().clear();
         for (Map<String, Object> msg : messages) {
-            MessageItem messageItem = createMessageItem(msg);
-            messageList.getItems().add(messageItem);
+            String recipient = (String) msg.get("recipient");
+            String username = (String) msg.get("username");
+            boolean isPrivate = recipient != null && !recipient.isEmpty();
+            // Приватные сообщения видит только отправитель и получатель
+            if (!isPrivate || username.equals(currentUser) || recipient.equals(currentUser)) {
+                MessageItem messageItem = createMessageItem(msg);
+                messageList.getItems().add(messageItem);
+            }
         }
         scrollToBottom();
     }
 
     public void addMessage(Map<String, Object> msg) {
-        MessageItem messageItem = createMessageItem(msg);
-        messageList.getItems().add(messageItem);
-        scrollToBottom();
-        
-        // Уведомление о новом сообщении (если не от текущего пользователя)
+        String recipient = (String) msg.get("recipient");
         String username = (String) msg.get("username");
-        if (!username.equals(currentUser)) {
-            String content = (String) msg.get("content");
-            String notificationText = msg.containsKey("recipient") ? 
-                "Private message from " + username : 
-                username + ": " + content;
-            NotificationService.showNotification("New Message", notificationText, NotificationService.NotificationType.INFO);
+        boolean isPrivate = recipient != null && !recipient.isEmpty();
+        if (!isPrivate || username.equals(currentUser) || recipient.equals(currentUser)) {
+            MessageItem messageItem = createMessageItem(msg);
+            messageList.getItems().add(messageItem);
+            scrollToBottom();
+            // Уведомление о новом сообщении (если не от текущего пользователя)
+            if (!username.equals(currentUser)) {
+                String content = (String) msg.get("content");
+                String notificationText = msg.containsKey("recipient") ? 
+                    "Private message from " + username : 
+                    username + ": " + content;
+                NotificationService.showNotification("New Message", notificationText, NotificationService.NotificationType.INFO);
+            }
         }
     }
 
@@ -180,14 +194,20 @@ public class ChatView {
             UserItem userItem = new UserItem(username, username.equals(currentUser));
             userList.getItems().add(userItem);
         }
-        
-        // Обновляем комбобокс получателей
-        recipientCombo.getItems().clear();
-        recipientCombo.getItems().addAll(users.stream()
-            .filter(user -> !user.equals(currentUser))
-            .toList());
-        
+        // Обновляем комбобокс получателей только если он пуст (чтобы не затирать полный список)
+        if (recipientCombo.getItems().isEmpty()) {
+            recipientCombo.getItems().addAll(users.stream().filter(user -> !user.equals(currentUser)).toList());
+        }
         userCountLabel.setText(users.size() + " users online");
+    }
+
+    private void loadAllUsers() {
+        RoomService.getAllUsersAsync(token).thenAccept(users -> {
+            javafx.application.Platform.runLater(() -> {
+                recipientCombo.getItems().clear();
+                recipientCombo.getItems().addAll(users.stream().filter(u -> !u.equals(currentUser)).toList());
+            });
+        });
     }
 
     private MessageItem createMessageItem(Map<String, Object> msg) {

@@ -9,6 +9,8 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class UserService {
     @Autowired
@@ -39,6 +41,12 @@ public class UserService {
         // Удаляем все приватные сообщения, адресованные этому пользователю
         Query recipientQuery = new Query(Criteria.where("recipient").is(username));
         mongoTemplate.remove(recipientQuery, Message.class);
+    }
+
+    public List<String> getAllUsernames() {
+        return userRepository.findAll().stream()
+                .map(User::getUsername)
+                .toList();
     }
 }
 

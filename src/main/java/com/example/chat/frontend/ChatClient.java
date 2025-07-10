@@ -144,7 +144,7 @@ public class ChatClient extends Application {
 
     private void onRoomSelected(String room) {
         connectWebSocket(token, room);
-        chatView = new ChatView(this::sendMessage, room, currentUser);
+        chatView = new ChatView(this::sendMessage, room, currentUser, token);
         navigationController.navigateTo(chatView.getNode(this));
     }
 

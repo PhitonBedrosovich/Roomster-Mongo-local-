@@ -18,6 +18,8 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.time.LocalDateTime;
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
 
 @Component
 public class ChatWebSocketServer extends WebSocketServer {
+    private static final Logger logger = LoggerFactory.getLogger(ChatWebSocketServer.class);
     private final Map<String, Set<WebSocket>> rooms = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -46,11 +49,11 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        System.out.println("WebSocket connection opened: " + conn.getRemoteSocketAddress());
+        logger.info("WebSocket connection opened: {}", conn.getRemoteSocketAddress());
         
         String token = extractToken(handshake);
         if (token == null) {
-            System.out.println("No token provided in WebSocket connection");
+            logger.warn("No token provided in WebSocket connection from: {}", conn.getRemoteSocketAddress());
             conn.close(1008, "Authentication required");
             return;
         }
@@ -58,7 +61,7 @@ public class ChatWebSocketServer extends WebSocketServer {
         try {
             // Проверяем, не истек ли токен
             if (jwtUtil.isTokenExpired(token)) {
-                System.out.println("JWT token expired for connection: " + conn.getRemoteSocketAddress());
+                logger.warn("JWT token expired for connection: {}", conn.getRemoteSocketAddress());
                 conn.close(1008, "Token expired");
                 return;
             }
@@ -68,14 +71,14 @@ public class ChatWebSocketServer extends WebSocketServer {
             // Проверяем, существует ли пользователь в базе данных
             User user = userService.findByUsername(username);
             if (user == null) {
-                System.out.println("User not found in database: " + username);
+                logger.warn("User not found in database: {}", username);
                 conn.close(1008, "User not found");
                 return;
             }
             
             conn.setAttachment(new ClientData(username, null));
-            System.out.println("User authenticated successfully: " + username);
-            System.out.println("Token expires at: " + jwtUtil.getExpirationDateFromToken(token));
+            logger.info("User authenticated successfully: {}", username);
+            logger.debug("Token expires at: {}", jwtUtil.getExpirationDateFromToken(token));
             
             // Отправляем подтверждение успешной аутентификации
             try {
@@ -85,20 +88,20 @@ public class ChatWebSocketServer extends WebSocketServer {
                     "expiresAt", jwtUtil.getExpirationDateFromToken(token).toString()
                 )));
             } catch (Exception e) {
-                System.out.println("Error sending auth success message: " + e.getMessage());
+                logger.error("Error sending auth success message: {}", e.getMessage(), e);
             }
             
         } catch (ExpiredJwtException e) {
-            System.out.println("JWT token expired for connection: " + conn.getRemoteSocketAddress());
+            logger.warn("JWT token expired for connection: {}", conn.getRemoteSocketAddress());
             conn.close(1008, "Token expired");
         } catch (MalformedJwtException e) {
-            System.out.println("Malformed JWT token: " + e.getMessage());
+            logger.warn("Malformed JWT token: {}", e.getMessage());
             conn.close(1008, "Invalid token format");
         } catch (SignatureException e) {
-            System.out.println("Invalid JWT signature: " + e.getMessage());
+            logger.warn("Invalid JWT signature: {}", e.getMessage());
             conn.close(1008, "Invalid token signature");
         } catch (Exception e) {
-            System.out.println("Authentication failed: " + e.getMessage());
+            logger.error("Authentication failed: {}", e.getMessage(), e);
             conn.close(1008, "Authentication failed");
         }
     }
@@ -121,7 +124,7 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        System.out.println("WebSocket connection closed: " + reason);
+        logger.info("WebSocket connection closed: {} (code: {}, remote: {})", reason, code, remote);
         ClientData clientData = conn.getAttachment();
         if (clientData != null && clientData.room != null) {
             String room = clientData.room;
@@ -136,7 +139,7 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     @Override
     public void onMessage(WebSocket conn, String message) {
-        System.out.println("Message received: " + message);
+        logger.debug("Message received: {}", message);
         try {
             Map<String, Object> data = objectMapper.readValue(
                 message, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
@@ -147,7 +150,7 @@ public class ChatWebSocketServer extends WebSocketServer {
             String username = clientData.username;
 
             if ("join".equals(type)) {
-                System.out.println("User " + username + " joining room: " + room);
+                logger.info("User {} joining room: {}", username, room);
                 rooms.computeIfAbsent(room, k -> new HashSet<>()).add(conn);
                 clientData.room = room;
 
@@ -161,13 +164,14 @@ public class ChatWebSocketServer extends WebSocketServer {
                 List<Message> history = mongoTemplate.find(query, Message.class);
                 try {
                     conn.send(objectMapper.writeValueAsString(Map.of("type", "history", "messages", history)));
-                    System.out.println("Sent " + history.size() + " filtered history messages to " + username + " (registered at: " + userRegisteredAt + ")");
+                    logger.info("Sent {} filtered history messages to {} (registered at: {})", 
+                              history.size(), username, userRegisteredAt);
                 } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                    e.printStackTrace();
+                    logger.error("Error sending history messages: {}", e.getMessage(), e);
                 }
                 broadcastRoomUsers(room);
             } else if ("message".equals(type)) {
-                System.out.println("Processing message from " + username + " in room " + room);
+                logger.info("Processing message from {} in room {}", username, room);
                 Message msg = new Message();
                 msg.setUsername(username);
                 msg.setRoom(room);
@@ -175,7 +179,7 @@ public class ChatWebSocketServer extends WebSocketServer {
                 msg.setPrivate(data.containsKey("recipient"));
                 msg.setRecipient((String) data.get("recipient"));
                 mongoTemplate.save(msg);
-                System.out.println("Message saved to database");
+                logger.debug("Message saved to database");
 
                 if (msg.isPrivate()) {
                     getConnections().forEach(client -> {
@@ -183,9 +187,9 @@ public class ChatWebSocketServer extends WebSocketServer {
                         if (clientUsername.equals(username) || clientUsername.equals(msg.getRecipient())) {
                             try {
                                 client.send(objectMapper.writeValueAsString(Map.of("type", "message", "message", msg)));
-                                System.out.println("Private message sent to " + clientUsername);
+                                logger.debug("Private message sent to {}", clientUsername);
                             } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                                e.printStackTrace();
+                                logger.error("Error sending private message: {}", e.getMessage(), e);
                             }
                         }
                     });
@@ -193,27 +197,27 @@ public class ChatWebSocketServer extends WebSocketServer {
                     rooms.get(room).forEach(client -> {
                         try {
                             client.send(objectMapper.writeValueAsString(Map.of("type", "message", "message", msg)));
-                            System.out.println("Message broadcasted to room " + room);
+                            logger.debug("Message broadcasted to room {}", room);
                         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                            e.printStackTrace();
+                            logger.error("Error broadcasting message: {}", e.getMessage(), e);
                         }
                     });
                 }
             }
         } catch (Exception e) {
-            System.out.println("Error processing message: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error processing message: {}", e.getMessage(), e);
         }
     }
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        ex.printStackTrace();
+        logger.error("WebSocket error for connection {}: {}", 
+                    conn != null ? conn.getRemoteSocketAddress() : "unknown", ex.getMessage(), ex);
     }
 
     @Override
     public void onStart() {
-        System.out.println("WebSocket server started on port 8082");
+        logger.info("WebSocket server started on port 8082");
     }
 
     private void broadcastRoomUsers(String room) {
@@ -226,7 +230,7 @@ public class ChatWebSocketServer extends WebSocketServer {
             try {
                 client.send(objectMapper.writeValueAsString(Map.of("type", "users", "users", users)));
             } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                e.printStackTrace();
+                logger.error("Error broadcasting room users: {}", e.getMessage(), e);
             }
         });
     }

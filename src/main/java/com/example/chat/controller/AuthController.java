@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,6 +16,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @Autowired
     private UserService userService;
@@ -25,7 +28,7 @@ public class AuthController {
     private JwtUtil jwtUtil;
 
     public AuthController() {
-        System.out.println("AuthController initialized!");
+        logger.info("AuthController initialized!");
     }
 
     @GetMapping("/test")
@@ -36,18 +39,18 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody User user) {
         try {
-            System.out.println("Registering user: " + user.getUsername());
+            logger.info("Registering user: {}", user.getUsername());
             // Проверка уникальности username
             if (userService.findByUsername(user.getUsername()) != null) {
+                logger.warn("Registration failed: username {} already exists", user.getUsername());
                 return ResponseEntity.badRequest().body("Username already exists");
             }
             user.setPassword(passwordEncoder.encode(user.getPassword()));
             userService.saveUser(user);
-            System.out.println("User registered successfully: " + user.getUsername());
+            logger.info("User registered successfully: {}", user.getUsername());
             return ResponseEntity.ok("User registered");
         } catch (Exception e) {
-            System.out.println("Registration error: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Registration error for user {}: {}", user.getUsername(), e.getMessage(), e);
             return ResponseEntity.badRequest().body("Username already exists");
         }
     }
@@ -55,19 +58,18 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody User user) {
         try {
-            System.out.println("Login attempt for user: " + user.getUsername());
+            logger.info("Login attempt for user: {}", user.getUsername());
             
             User existingUser = userService.findByUsername(user.getUsername());
-            System.out.println("Found user: " + (existingUser != null ? existingUser.getUsername() : "null"));
+            logger.debug("Found user: {}", existingUser != null ? existingUser.getUsername() : "null");
             
             if (existingUser != null && passwordEncoder.matches(user.getPassword(), existingUser.getPassword())) {
-                System.out.println("Password matches for user: " + existingUser.getUsername());
+                logger.info("Password matches for user: {}", existingUser.getUsername());
                 
                 String token = jwtUtil.generateToken(existingUser.getUsername());
                 
-                System.out.println("JWT token generated for user: " + existingUser.getUsername());
-                System.out.println("Token: " + token);
-                System.out.println("Token expires at: " + jwtUtil.getExpirationDateFromToken(token));
+                logger.debug("JWT token generated for user: {}", existingUser.getUsername());
+                logger.debug("Token expires at: {}", jwtUtil.getExpirationDateFromToken(token));
                 
                 Map<String, String> response = new HashMap<>();
                 response.put("token", token);
@@ -76,11 +78,10 @@ public class AuthController {
                 return ResponseEntity.ok(response);
             }
             
-            System.out.println("Login failed for user: " + user.getUsername());
+            logger.warn("Login failed for user: {}", user.getUsername());
             return ResponseEntity.status(401).body("Invalid credentials");
         } catch (Exception e) {
-            System.out.println("Login error: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Login error for user {}: {}", user.getUsername(), e.getMessage(), e);
             return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
         }
     }
@@ -90,10 +91,12 @@ public class AuthController {
         try {
             String token = request.get("token");
             if (token == null) {
+                logger.warn("Token validation failed: token is null");
                 return ResponseEntity.badRequest().body("Token is required");
             }
 
             if (jwtUtil.isTokenExpired(token)) {
+                logger.warn("Token validation failed: token expired");
                 return ResponseEntity.status(401).body("Token expired");
             }
 
@@ -101,9 +104,11 @@ public class AuthController {
             User user = userService.findByUsername(username);
             
             if (user == null) {
+                logger.warn("Token validation failed: user not found for username {}", username);
                 return ResponseEntity.status(401).body("User not found");
             }
 
+            logger.debug("Token validation successful for user: {}", username);
             Map<String, Object> response = new HashMap<>();
             response.put("valid", true);
             response.put("username", username);
@@ -111,7 +116,7 @@ public class AuthController {
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.out.println("Token validation error: " + e.getMessage());
+            logger.error("Token validation error: {}", e.getMessage(), e);
             return ResponseEntity.status(401).body("Invalid token");
         }
     }
@@ -139,13 +144,12 @@ public class AuthController {
     @DeleteMapping("/user/{username}")
     public ResponseEntity<?> deleteUser(@PathVariable String username) {
         try {
-            System.out.println("Deleting user: " + username);
+            logger.info("Deleting user: {}", username);
             userService.deleteUserAndMessages(username);
-            System.out.println("User and messages deleted successfully: " + username);
+            logger.info("User and messages deleted successfully: {}", username);
             return ResponseEntity.ok("User and all messages deleted");
         } catch (Exception e) {
-            System.out.println("Delete user error: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Delete user error for {}: {}", username, e.getMessage(), e);
             return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
         }
     }

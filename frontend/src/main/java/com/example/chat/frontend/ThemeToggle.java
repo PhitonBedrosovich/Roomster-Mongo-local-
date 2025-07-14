@@ -10,12 +10,25 @@ import javafx.util.Duration;
 import javafx.scene.layout.StackPane;
 import javafx.scene.Node;
 import javafx.scene.shape.Rectangle;
+import java.util.prefs.Preferences;
 
 public class ThemeToggle extends Button {
     private boolean isDarkTheme = false;
+    private static final String PREF_KEY = "theme.dark";
+    private static final Preferences prefs = Preferences.userNodeForPackage(ThemeToggle.class);
 
     public ThemeToggle() {
+        // Восстанавливаем тему из Preferences
+        isDarkTheme = prefs.getBoolean(PREF_KEY, false);
         createUI();
+        // Применяем тему сразу после создания
+        applyTheme(isDarkTheme ? "dark-theme" : "light-theme");
+        setText(isDarkTheme ? "🌙" : "☼");
+        if (isDarkTheme) {
+            getStyleClass().remove("sun-theme");
+        } else {
+            if (!getStyleClass().contains("sun-theme")) getStyleClass().add("sun-theme");
+        }
     }
 
     private void createUI() {
@@ -32,6 +45,7 @@ public class ThemeToggle extends Button {
 
     private void toggleTheme() {
         isDarkTheme = !isDarkTheme;
+        prefs.putBoolean(PREF_KEY, isDarkTheme); // сохраняем выбор
         Node root = getScene().getRoot();
         StackPane stackPane = null;
         if (root instanceof StackPane) {

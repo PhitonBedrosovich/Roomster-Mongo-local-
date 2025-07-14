@@ -19,6 +19,7 @@ public class LoginView {
     private Label errorLabel;
     private Button loginButton;
     private Button registerButton;
+    private ProgressIndicator loadingIndicator;
 
     public LoginView(Consumer<String> onLoginSuccess) {
         this.onLoginSuccess = onLoginSuccess;
@@ -66,6 +67,12 @@ public class LoginView {
 
         buttonContainer.getChildren().addAll(loginButton, registerButton);
 
+        // Индикатор загрузки
+        loadingIndicator = new ProgressIndicator();
+        loadingIndicator.setVisible(false);
+        loadingIndicator.setManaged(false);
+        loadingIndicator.setPrefSize(40, 40);
+
         // Обработчики событий
         loginButton.setOnAction(e -> handleLogin(usernameField.getText(), passwordField.getText()));
         registerButton.setOnAction(e -> handleRegister(usernameField.getText(), passwordField.getText()));
@@ -80,7 +87,7 @@ public class LoginView {
         errorLabel.setVisible(false);
         errorLabel.setManaged(false);
 
-        inputContainer.getChildren().addAll(usernameField, passwordField, buttonContainer, errorLabel);
+        inputContainer.getChildren().addAll(usernameField, passwordField, buttonContainer, errorLabel, loadingIndicator);
         root.getChildren().addAll(welcomeLabel, inputContainer);
     }
 
@@ -160,6 +167,8 @@ public class LoginView {
     private void setLoading(boolean loading) {
         loginButton.setDisable(loading);
         registerButton.setDisable(loading);
+        loadingIndicator.setVisible(loading);
+        loadingIndicator.setManaged(loading);
         if (loading) {
             loginButton.setText("Signing In...");
             registerButton.setText("Signing Up...");

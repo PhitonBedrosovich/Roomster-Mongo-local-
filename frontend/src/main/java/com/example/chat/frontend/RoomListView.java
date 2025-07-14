@@ -24,6 +24,7 @@ public class RoomListView {
     private Button deleteButton;
     private TextField newRoomField;
     private Label statusLabel;
+    private ProgressIndicator loadingIndicator;
 
     public RoomListView(Consumer<String> onRoomSelected, String token) {
         this.onRoomSelected = onRoomSelected;
@@ -104,6 +105,12 @@ public class RoomListView {
 
         createContainer.getChildren().addAll(createLabel, inputContainer, statusLabel);
 
+        // Индикатор загрузки
+        loadingIndicator = new ProgressIndicator();
+        loadingIndicator.setVisible(false);
+        loadingIndicator.setManaged(false);
+        loadingIndicator.setPrefSize(40, 40);
+
         // Обработчики событий
         joinButton.setOnAction(e -> joinSelectedRoom());
         deleteButton.setOnAction(e -> deleteSelectedRoom());
@@ -117,7 +124,7 @@ public class RoomListView {
             }
         });
 
-        roomContainer.getChildren().addAll(roomList, buttonContainer);
+        roomContainer.getChildren().addAll(roomList, buttonContainer, loadingIndicator);
         root.getChildren().addAll(titleLabel, subtitleLabel, roomContainer, createContainer);
     }
 
@@ -126,13 +133,16 @@ public class RoomListView {
     }
 
     private void loadRooms() {
+        setLoading(true);
         RoomService.getRooms(token,
             rooms -> {
+                setLoading(false);
                 roomList.getItems().clear();
                 roomList.getItems().addAll(rooms);
                 updateButtonStates();
             },
             error -> {
+                setLoading(false);
                 showStatus("Failed to load rooms: " + error, false);
                 NotificationService.showNotification("Error", "Failed to load rooms", NotificationService.NotificationType.ERROR);
             }
@@ -224,6 +234,8 @@ public class RoomListView {
         deleteButton.setDisable(loading);
         createButton.setDisable(loading);
         newRoomField.setDisable(loading);
+        loadingIndicator.setVisible(loading);
+        loadingIndicator.setManaged(loading);
     }
 
     private void updateButtonStates() {

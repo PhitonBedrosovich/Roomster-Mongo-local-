@@ -23,25 +23,54 @@
 ## Структура проекта
 
 ```
-src/main/java/com/example/chat/
-├── Application.java              # Главный класс приложения
-├── client/                       # JavaFX клиент
-│   ├── ChatClient.java          # Основной клиент
-│   ├── ChatView.java            # Интерфейс чата
-│   ├── LoginView.java           # Интерфейс входа
-│   └── RoomListView.java        # Список комнат
-├── config/
-│   └── SecurityConfig.java      # Конфигурация безопасности
-├── controller/
-│   └── AuthController.java      # Контроллер аутентификации
-├── model/
-│   ├── Message.java             # Модель сообщения
-│   └── User.java                # Модель пользователя
-├── service/
-│   └── UserService.java         # Сервис пользователей
-└── websocket/
-    ├── ChatWebSocketServer.java # WebSocket сервер
-    └── WebSocketConfig.java     # Конфигурация WebSocket
+frontend/
+├── pom.xml
+└── src/
+    ├── main/
+    │   ├── java/
+    │   │   └── com/example/chat/frontend/
+    │   │        ├── ChatClient.java
+    │   │        ├── ChatView.java
+    │   │        ├── LoginView.java
+    │   │        ├── NavigationBar.java
+    │   │        ├── NavigationController.java
+    │   │        ├── ProfileView.java
+    │   │        ├── RoomListView.java
+    │   │        ├── ThemeToggle.java
+    │   │        ├── TokenInfoView.java
+    │   │        └── service/
+    │   │             ├── AuthService.java
+    │   │             ├── NotificationService.java
+    │   │             └── RoomService.java
+    │   └── resources/
+    │        └── styles.css
+src/
+└── main/
+    ├── java/
+    │   └── com/example/chat/
+    │        ├── Application.java
+    │        ├── config/
+    │        │    ├── JwtUtil.java
+    │        │    └── SecurityConfig.java
+    │        ├── controller/
+    │        │    ├── AuthController.java
+    │        │    └── RoomController.java
+    │        ├── model/
+    │        │    ├── Message.java
+    │        │    └── User.java
+    │        ├── service/
+    │        │    └── UserService.java
+    │        └── websocket/
+    │             ├── ChatWebSocketServer.java
+    │             └── WebSocketConfig.java
+    └── resources/
+         ├── application.properties
+         └── logback-spring.xml
+logs/
+target/
+update_users.js
+pom.xml
+README.md
 ```
 
 ## Запуск

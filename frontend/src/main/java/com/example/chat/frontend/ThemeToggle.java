@@ -21,14 +21,18 @@ public class ThemeToggle extends Button {
         // Восстанавливаем тему из Preferences
         isDarkTheme = prefs.getBoolean(PREF_KEY, false);
         createUI();
-        // Применяем тему сразу после создания
-        applyTheme(isDarkTheme ? "dark-theme" : "light-theme");
-        setText(isDarkTheme ? "🌙" : "☼");
-        if (isDarkTheme) {
-            getStyleClass().remove("sun-theme");
-        } else {
-            if (!getStyleClass().contains("sun-theme")) getStyleClass().add("sun-theme");
-        }
+        // Применяем тему, когда кнопка появится на сцене
+        sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                applyTheme(isDarkTheme ? "dark-theme" : "light-theme");
+                setText(isDarkTheme ? "🌙" : "☼");
+                if (isDarkTheme) {
+                    getStyleClass().remove("sun-theme");
+                } else {
+                    if (!getStyleClass().contains("sun-theme")) getStyleClass().add("sun-theme");
+                }
+            }
+        });
     }
 
     private void createUI() {

@@ -3,6 +3,7 @@ package com.example.chat.websocket;
 import com.example.chat.model.Message;
 import com.example.chat.model.User;
 import com.example.chat.service.UserService;
+import com.example.chat.service.MessageService;
 import com.example.chat.config.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -38,6 +39,9 @@ public class ChatWebSocketServer extends WebSocketServer {
     
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private MessageService messageService;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -158,10 +162,8 @@ public class ChatWebSocketServer extends WebSocketServer {
                 User user = userService.findByUsername(username);
                 LocalDateTime userRegisteredAt = user != null ? user.getRegisteredAt() : LocalDateTime.now();
 
-                // Отправлять отфильтрованную историю сообщений на основе времени регистрации пользователя
-                Query query = new Query(Criteria.where("room").is(room)
-                        .and("createdAt").gte(userRegisteredAt)).limit(50);
-                List<Message> history = mongoTemplate.find(query, Message.class);
+                // Используем кэшированную историю сообщений
+                List<Message> history = messageService.getRoomMessages(room, userRegisteredAt);
                 try {
                     conn.send(objectMapper.writeValueAsString(Map.of("type", "history", "messages", history)));
                     logger.info("Sent {} filtered history messages to {} (registered at: {})", 
@@ -180,6 +182,11 @@ public class ChatWebSocketServer extends WebSocketServer {
                 msg.setRecipient((String) data.get("recipient"));
                 mongoTemplate.save(msg);
                 logger.debug("Message saved to database");
+
+                // Сброс кэша истории комнаты для всех пользователей
+                User user = userService.findByUsername(username);
+                LocalDateTime userRegisteredAt = user != null ? user.getRegisteredAt() : LocalDateTime.now();
+                messageService.invalidateRoomCache(room, userRegisteredAt);
 
                 if (msg.isPrivate()) {
                     getConnections().forEach(client -> {

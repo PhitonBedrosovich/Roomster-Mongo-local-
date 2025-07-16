@@ -21,6 +21,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.net.InetSocketAddress;
 import java.time.LocalDateTime;
@@ -45,6 +46,10 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+    private static final String REDIS_CHANNEL = "chat-messages";
 
     public ChatWebSocketServer() {
         super(new InetSocketAddress(8082));
@@ -188,6 +193,14 @@ public class ChatWebSocketServer extends WebSocketServer {
                 LocalDateTime userRegisteredAt = user != null ? user.getRegisteredAt() : LocalDateTime.now();
                 messageService.invalidateRoomCache(room, userRegisteredAt);
 
+                // Публикуем сообщение в Redis для горизонтального масштабирования
+                try {
+                    String msgJson = objectMapper.writeValueAsString(msg);
+                    redisTemplate.convertAndSend(REDIS_CHANNEL, msgJson);
+                } catch (Exception e) {
+                    logger.error("Error publishing message to Redis: {}", e.getMessage(), e);
+                }
+
                 if (msg.isPrivate()) {
                     getConnections().forEach(client -> {
                         String clientUsername = ((ClientData) client.getAttachment()).username;
@@ -245,6 +258,39 @@ public class ChatWebSocketServer extends WebSocketServer {
     private String getClientRoom(WebSocket conn) {
         ClientData data = conn.getAttachment();
         return data != null ? data.room : null;
+    }
+
+    // Метод для рассылки сообщений, пришедших из Redis, локальным WebSocket-подключениям
+    public void broadcastFromRedis(String messageJson) {
+        try {
+            Message msg = objectMapper.readValue(messageJson, Message.class);
+            String room = msg.getRoom();
+            if (msg.isPrivate()) {
+                getConnections().forEach(client -> {
+                    String clientUsername = ((ClientData) client.getAttachment()).username;
+                    if (clientUsername.equals(msg.getUsername()) || clientUsername.equals(msg.getRecipient())) {
+                        try {
+                            client.send(objectMapper.writeValueAsString(Map.of("type", "message", "message", msg)));
+                        } catch (Exception e) {
+                            logger.error("Error sending private message from Redis: {}", e.getMessage(), e);
+                        }
+                    }
+                });
+            } else {
+                Set<WebSocket> roomSet = rooms.get(room);
+                if (roomSet != null) {
+                    roomSet.forEach(client -> {
+                        try {
+                            client.send(objectMapper.writeValueAsString(Map.of("type", "message", "message", msg)));
+                        } catch (Exception e) {
+                            logger.error("Error broadcasting message from Redis: {}", e.getMessage(), e);
+                        }
+                    });
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error in broadcastFromRedis: {}", e.getMessage(), e);
+        }
     }
 
     private static class ClientData {

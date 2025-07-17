@@ -11,6 +11,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.scene.text.FontPosture;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -45,6 +46,14 @@ public class ChatView {
         this.token = token;
         createUI();
         loadAllUsers();
+        // --- Добавлено: слушатель на смену темы ---
+        messageList.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                newScene.getRoot().getStyleClass().addListener((javafx.collections.ListChangeListener<String>) c -> {
+                    messageList.refresh();
+                });
+            }
+        });
     }
 
     private void createUI() {
@@ -275,6 +284,7 @@ public class ChatView {
         @Override
         protected void updateItem(MessageItem item, boolean empty) {
             super.updateItem(item, empty);
+            setTextFill(null);
             if (empty || item == null) {
                 setText(null);
                 setGraphic(null);
@@ -282,41 +292,67 @@ public class ChatView {
             } else {
                 VBox container = new VBox(5);
                 container.setPadding(new Insets(8));
-                
+
                 HBox headerBox = new HBox(10);
                 headerBox.setAlignment(Pos.CENTER_LEFT);
-                
+
                 Label usernameLabel = new Label(item.getUsername());
                 usernameLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 12));
-                
+                usernameLabel.setStyle("");
+
                 Label timeLabel = new Label(item.getTimestamp());
                 timeLabel.setFont(Font.font("Segoe UI", 10));
                 timeLabel.getStyleClass().add("subtitle");
-                
+                timeLabel.setStyle("");
+
+                Label contentLabel = new Label(item.getContent());
+                contentLabel.setWrapText(true);
+                contentLabel.setMaxWidth(400);
+                contentLabel.setFont(Font.font("Segoe UI", FontPosture.ITALIC, 15));
+                contentLabel.setStyle("");
+
+                Label privateLabel = null;
                 if (item.isPrivate()) {
-                    Label privateLabel = new Label("🔒 Private");
+                    privateLabel = new Label("🔒 Private");
                     privateLabel.getStyleClass().add("warning");
+                    privateLabel.setStyle("-fx-text-fill: #e53935;");
+                }
+
+                String theme = "light";
+                if (getScene() != null && getScene().getRoot().getStyleClass().contains("dark-theme")) {
+                    theme = "dark";
+                }
+                if (theme.equals("dark")) {
+                    if (item.isOwn()) {
+                        contentLabel.setTextFill(javafx.scene.paint.Color.web("#fff"));
+                        usernameLabel.setTextFill(javafx.scene.paint.Color.web("#e9ecef"));
+                        timeLabel.setTextFill(javafx.scene.paint.Color.web("#51cf66"));
+                    } else {
+                        contentLabel.setTextFill(javafx.scene.paint.Color.web("#51cf66"));
+                        usernameLabel.setTextFill(javafx.scene.paint.Color.web("#e9ecef"));
+                        timeLabel.setTextFill(javafx.scene.paint.Color.web("#51cf66"));
+                    }
+                } else {
+                    if (item.isOwn()) {
+                        contentLabel.setTextFill(javafx.scene.paint.Color.web("#000"));
+                        usernameLabel.setTextFill(javafx.scene.paint.Color.web("#212529"));
+                        timeLabel.setTextFill(javafx.scene.paint.Color.web("#007bff"));
+                    } else {
+                        contentLabel.setTextFill(javafx.scene.paint.Color.web("#007bff"));
+                        usernameLabel.setTextFill(javafx.scene.paint.Color.web("#212529"));
+                        timeLabel.setTextFill(javafx.scene.paint.Color.web("#007bff"));
+                    }
+                }
+                if (privateLabel != null) privateLabel.setTextFill(javafx.scene.paint.Color.web("#e53935"));
+
+                if (item.isPrivate() && privateLabel != null) {
                     headerBox.getChildren().addAll(usernameLabel, privateLabel, timeLabel);
                 } else {
                     headerBox.getChildren().addAll(usernameLabel, timeLabel);
                 }
-                
-                Label contentLabel = new Label(item.getContent());
-                contentLabel.setWrapText(true);
-                contentLabel.setMaxWidth(400);
-                
                 container.getChildren().addAll(headerBox, contentLabel);
-                
-                // Применяем стили
                 getStyleClass().clear();
                 getStyleClass().add("message-item");
-                if (item.isOwn()) {
-                    getStyleClass().add("own");
-                }
-                if (item.isPrivate()) {
-                    getStyleClass().add("private");
-                }
-                
                 setGraphic(container);
                 setText(null);
             }

@@ -14,8 +14,8 @@
 
 /* Темная тема */
 .root.dark-theme {
-    -fx-background-color: #212529;
-    -fx-text-fill: #f8f9fa;
+    -fx-background-color: linear-gradient(to bottom, #23272e 0%, #181a20 100%);
+    -fx-text-fill: #e9ecef;
 }
 
 /* Стили для кнопок */
@@ -137,22 +137,72 @@
 
 /* Стили для сообщений в чате */
 .message-item {
-    -fx-background-color: #f8f9fa;
-    -fx-border-color: #e9ecef;
-    -fx-border-radius: 8px;
-    -fx-background-radius: 8px;
-    -fx-padding: 12px;
-    -fx-margin: 4px;
+    -fx-background-color: transparent !important;
+    -fx-border-color: transparent !important;
+    -fx-effect: none !important;
+    -fx-padding: 12px 18px;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-margin: 6px 0;
 }
 
-.message-item.own {
-    -fx-background-color: #007bff;
-    -fx-text-fill: white;
+/* Убираем цветовые классы для сообщений, чтобы фон был всегда прозрачным */
+.message-item.own,
+.message-item.private,
+.message-item.user-color-1,
+.message-item.user-color-2,
+.message-item.user-color-3,
+.message-item.user-color-4,
+.message-item.user-color-5 {
+    -fx-background-color: transparent !important;
+    -fx-border-color: transparent !important;
+    -fx-effect: none !important;
 }
 
-.message-item.private {
-    -fx-background-color: #fff3cd;
-    -fx-border-color: #ffeaa7;
+/* Свои сообщения — яркий градиент */
+.root.dark-theme .message-item.own {
+    -fx-background-color: linear-gradient(90deg, #339af0 60%, #23272e 100%);
+    -fx-text-fill: #fff;
+    -fx-border-color: #339af0;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, #339af0AA, 8, 0, 0, 2);
+}
+
+/* Приватные сообщения — фиолетовый градиент и рамка */
+.root.dark-theme .message-item.private {
+    -fx-background-color: linear-gradient(90deg, #a084e8 60%, #23272e 100%);
+    -fx-border-color: #a084e8;
+    -fx-text-fill: #e0c3fc;
+    -fx-font-style: italic;
+    -fx-effect: dropshadow(gaussian, #a084e8AA, 8, 0, 0, 2);
+}
+
+/* Сообщения других пользователей — разные оттенки (по модулю username) */
+.root.dark-theme .message-item.user-color-1 {
+    -fx-background-color: linear-gradient(90deg, #20c997 60%, #23272e 100%);
+    -fx-border-color: #20c997;
+}
+.root.dark-theme .message-item.user-color-2 {
+    -fx-background-color: linear-gradient(90deg, #ff922b 60%, #23272e 100%);
+    -fx-border-color: #ff922b;
+}
+.root.dark-theme .message-item.user-color-3 {
+    -fx-background-color: linear-gradient(90deg, #f06595 60%, #23272e 100%);
+    -fx-border-color: #f06595;
+}
+.root.dark-theme .message-item.user-color-4 {
+    -fx-background-color: linear-gradient(90deg, #845ef7 60%, #23272e 100%);
+    -fx-border-color: #845ef7;
+}
+.root.dark-theme .message-item.user-color-5 {
+    -fx-background-color: linear-gradient(90deg, #51cf66 60%, #23272e 100%);
+    -fx-border-color: #51cf66;
+}
+
+/* Новое/непрочитанное сообщение — лёгкое свечение */
+.root.dark-theme .message-item.unread {
+    -fx-effect: dropshadow(gaussian, #51cf66AA, 12, 0, 0, 2);
+    -fx-border-width: 2px;
 }
 
 /* Стили для комнат */
@@ -630,4 +680,26 @@
 .root .profile-title {
     -fx-text-fill: #212529 !important;
 } 
+ 
+/* --- Улучшенная и разнообразная тёмная тема --- */
+.root.dark-theme {
+    -fx-background-color: linear-gradient(to bottom, #23272e 0%, #181a20 100%);
+    -fx-text-fill: #e9ecef;
+}
+
+.root.dark-theme .card {
+    -fx-background-color: linear-gradient(to bottom, #23272e 0%, #23272e 80%, #181a20 100%);
+    -fx-border-color: #343a40;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 8, 0, 0, 2);
+}
+
+/* --- Минималистичный фон для комнаты и сообщений --- */
+.chat-container {
+    -fx-background-color: #f8f9fa;
+}
+.root.dark-theme .chat-container {
+    -fx-background-color: #181a20;
+}
+
+/* --- Конец улучшенной тёмной темы --- */ 
  

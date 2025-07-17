@@ -1,0 +1,45 @@
+version: '3.8'
+services:
+  mongo:
+    image: mongo:8.0
+    container_name: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:7.2
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    image: roomster-server
+    container_name: roomster-app
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    ports:
+      - "8081:8081"
+      - "8082:8082"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/chatdb
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    # Добавьте другие переменные окружения, если нужно
+
+volumes:
+  mongo_data:
+  redis_data: 

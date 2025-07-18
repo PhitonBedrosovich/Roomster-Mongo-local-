@@ -49,3 +49,14 @@ Thumbs.db
 
 # Application specific
 application.properties 
+
+# Исключить артефакты jpackage и собранные приложения
+frontend/RoomsterClient/
+RoomsterClient/
+*.msi
+*.exe
+*.app
+*.dmg
+*.pkg
+*.deb
+*.rpm 

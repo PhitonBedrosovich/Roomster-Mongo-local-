@@ -8,7 +8,7 @@
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
-    <javafx.version>20</javafx.version>
+    <javafx.version>21.0.2</javafx.version>
     <jackson.version>2.15.2</jackson.version>
     <javawebsocket.version>1.5.3</javawebsocket.version>
   </properties>
@@ -51,6 +51,40 @@
         <configuration>
           <mainClass>com.example.chat.frontend.ChatClient</mainClass>
         </configuration>
+      </plugin>
+      <!-- Плагин для создания jar с Main-Class -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.example.chat.frontend.ChatClient</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+      <!-- Плагин для создания fat jar (uber-jar) с зависимостями -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>com.example.chat.frontend.ChatClient</mainClass>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

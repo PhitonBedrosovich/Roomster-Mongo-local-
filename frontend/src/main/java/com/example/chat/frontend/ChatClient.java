@@ -1,5 +1,9 @@
 package com.example.chat.frontend;
 
+import com.example.chat.frontend.crypto.*;
+import com.example.chat.frontend.detection.SensitiveDataDetector;
+import com.example.chat.frontend.detection.ScanResult;
+import com.example.chat.frontend.service.RoomService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -8,10 +12,14 @@ import javafx.scene.layout.BorderPane;
 import javafx.stage.Stage;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
+import java.security.KeyPair;
 import java.util.*;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.control.Button;
@@ -24,6 +32,7 @@ import javafx.scene.layout.Priority;
 import javafx.stage.StageStyle;
 
 public class ChatClient extends Application {
+    private static final Logger logger = LoggerFactory.getLogger(ChatClient.class);
     private static WebSocketClient wsClient;
     private static ObjectMapper objectMapper = new ObjectMapper();
     private static ChatView chatView;
@@ -33,6 +42,10 @@ public class ChatClient extends Application {
     private BorderPane rootPane;
     private NavigationBar navigationBar;
     private String currentToken;
+    
+    // Криптографические компоненты
+    private static SensitiveDataDetector sensitiveDataDetector;
+    private static KeyExchangeHandler keyExchangeHandler;
 
     // Вспомогательные классы для десериализации
     private static class HistoryPayload {
@@ -125,8 +138,54 @@ public class ChatClient extends Application {
         navigationBar.updateUser(currentUser);
         navigationBar.updateToken(currentToken);
         
+        // Инициализируем криптографические компоненты
+        initializeCryptography(currentUser);
+        
         RoomListView roomListView = new RoomListView(this::onRoomSelected, token);
         navigationController.navigateTo(roomListView.getNode(this));
+    }
+    
+    /**
+     * Инициализирует криптографические компоненты при входе пользователя.
+     */
+    private void initializeCryptography(String username) {
+        try {
+            // Инициализируем детектор чувствительных данных
+            sensitiveDataDetector = new SensitiveDataDetector();
+            
+            // Проверяем, есть ли уже identity ключи
+            if (!KeyStore.hasIdentityKeys()) {
+                // Генерируем новую пару ключей
+                KeyPair identityKeyPair = CryptoService.generateECKeyPair();
+                KeyStore.saveIdentityKeyPair(identityKeyPair, username);
+                
+                // Отправляем публичный ключ на сервер
+                String publicKeyBase64 = CryptoService.publicKeyToBase64(identityKeyPair.getPublic());
+                RoomService.setPublicKeyAsync(username, publicKeyBase64, "EC", token)
+                    .thenAccept(success -> {
+                        if (success) {
+                            logger.info("Public key uploaded to server successfully");
+                        } else {
+                            logger.warn("Failed to upload public key to server");
+                        }
+                    });
+            }
+            
+            // Инициализируем обработчик обмена ключами
+            keyExchangeHandler = new KeyExchangeHandler(
+                json -> {
+                    if (wsClient != null && wsClient.isOpen()) {
+                        wsClient.send(json);
+                    }
+                },
+                username,
+                token
+            );
+            
+            logger.info("Cryptography initialized for user: {}", username);
+        } catch (Exception e) {
+            logger.error("Error initializing cryptography", e);
+        }
     }
 
     private String extractUsernameFromToken(String token) {
@@ -159,6 +218,10 @@ public class ChatClient extends Application {
         if (navigationController != null) {
             navigationController.clearHistory();
         }
+        // Очищаем криптографические данные
+        KeyStore.clear();
+        sensitiveDataDetector = null;
+        keyExchangeHandler = null;
         LoginView loginView = new LoginView(this::onLoginSuccess);
         navigationController.setRoot(loginView.getNode(this));
     }
@@ -174,6 +237,11 @@ public class ChatClient extends Application {
                     joinMessage.put("room", room);
                     try {
                         send(objectMapper.writeValueAsString(joinMessage));
+                        
+                        // Проверяем наличие ключа комнаты и запрашиваем, если нет
+                        if (!KeyStore.hasRoomKey(room) && keyExchangeHandler != null) {
+                            keyExchangeHandler.requestRoomKey(room);
+                        }
                     } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                         e.printStackTrace();
                     }
@@ -189,17 +257,37 @@ public class ChatClient extends Application {
                         String type = (String) typeProbe.get("type");
                         
                         if ("auth_success".equals(type)) {
+                            // Аутентификация успешна
                         } else if ("history".equals(type)) {
                             HistoryPayload payload = objectMapper.readValue(message, HistoryPayload.class);
-                            Platform.runLater(() -> chatView.updateMessages(payload.messages));
+                            // Расшифровываем историю сообщений
+                            Platform.runLater(() -> {
+                                List<Map<String, Object>> decryptedMessages = decryptMessages(payload.messages);
+                                chatView.updateMessages(decryptedMessages);
+                            });
                         } else if ("message".equals(type)) {
                             MessagePayload payload = objectMapper.readValue(message, MessagePayload.class);
-                            Platform.runLater(() -> chatView.addMessage(payload.message));
+                            // Расшифровываем сообщение
+                            Platform.runLater(() -> {
+                                Map<String, Object> decryptedMessage = decryptMessage(payload.message);
+                                chatView.addMessage(decryptedMessage);
+                            });
                         } else if ("users".equals(type)) {
                             UsersPayload payload = objectMapper.readValue(message, UsersPayload.class);
                             Platform.runLater(() -> chatView.updateUsers(payload.users));
+                        } else if ("key_exchange".equals(type)) {
+                            // Обрабатываем обмен ключами
+                            if (keyExchangeHandler != null) {
+                                keyExchangeHandler.handleKeyExchange(typeProbe);
+                            }
+                        } else if ("key_request".equals(type)) {
+                            // Обрабатываем запрос ключа
+                            if (keyExchangeHandler != null) {
+                                keyExchangeHandler.handleKeyRequest(typeProbe);
+                            }
                         }
                     } catch (Exception e) {
+                        logger.error("Error processing WebSocket message", e);
                         e.printStackTrace();
                     }
                 }
@@ -236,18 +324,206 @@ public class ChatClient extends Application {
 
     private void sendMessage(String message, String recipient) {
         try {
+            // 1. Сканирование на чувствительные данные
+            if (sensitiveDataDetector != null) {
+                ScanResult scanResult = sensitiveDataDetector.scan(message);
+                if (scanResult.hasSensitiveData()) {
+                    // Показываем предупреждение пользователю
+                    boolean confirmed = showSensitiveDataWarning(scanResult);
+                    if (!confirmed) {
+                        logger.info("User cancelled message send due to sensitive data warning");
+                        return; // Пользователь отменил отправку
+                    }
+                }
+            }
+            
+            // 2. Шифрование сообщения
+            String ciphertext;
+            String room = chatView.getRoom();
+            
+            try {
+                if (recipient != null && !recipient.isEmpty()) {
+                    // Приватное сообщение: используем pairwise ключ
+                    if (!KeyStore.hasPairwiseKey(recipient)) {
+                        // Устанавливаем pairwise ключ, если его нет
+                        if (keyExchangeHandler != null) {
+                            keyExchangeHandler.establishPairwiseKey(recipient);
+                        }
+                        // Ждем немного для установки ключа (упрощенная версия)
+                        Thread.sleep(500);
+                    }
+                    
+                    javax.crypto.SecretKey pairwiseKey = KeyStore.getPairwiseKey(recipient);
+                    if (pairwiseKey == null) {
+                        throw new IllegalStateException("Pairwise key not available for user: " + recipient);
+                    }
+                    
+                    EncryptedMessage encrypted = CryptoService.encryptAESGCM(message, pairwiseKey);
+                    ciphertext = encrypted.toTransportFormat();
+                } else {
+                    // Групповое сообщение: используем ключ комнаты
+                    if (!KeyStore.hasRoomKey(room)) {
+                        // Запрашиваем ключ комнаты
+                        if (keyExchangeHandler != null) {
+                            keyExchangeHandler.requestRoomKey(room);
+                        }
+                        // Показываем сообщение пользователю
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.WARNING);
+                            alert.setTitle("Key Not Available");
+                            alert.setHeaderText("Room Key Missing");
+                            alert.setContentText("Requesting room key... Please wait and try again.");
+                            alert.showAndWait();
+                        });
+                        return;
+                    }
+                    
+                    javax.crypto.SecretKey roomKey = KeyStore.getRoomKey(room);
+                    EncryptedMessage encrypted = CryptoService.encryptAESGCM(message, roomKey);
+                    ciphertext = encrypted.toTransportFormat();
+                }
+            } catch (Exception e) {
+                logger.error("Error encrypting message", e);
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Encryption Error");
+                    alert.setHeaderText("Failed to Encrypt Message");
+                    alert.setContentText("Error: " + e.getMessage());
+                    alert.showAndWait();
+                });
+                return;
+            }
+            
+            // 3. Отправка зашифрованного сообщения
             Map<String, Object> msg = new HashMap<>();
             msg.put("type", "message");
-            msg.put("room", chatView.getRoom());
-            msg.put("message", message);
+            msg.put("room", room);
+            msg.put("message", ciphertext); // Отправляем ciphertext вместо plaintext
             if (recipient != null && !recipient.isEmpty()) {
                 msg.put("recipient", recipient);
             }
             String jsonMessage = objectMapper.writeValueAsString(msg);
             wsClient.send(jsonMessage);
+            
+            logger.debug("Encrypted message sent successfully");
         } catch (Exception e) {
+            logger.error("Error sending message", e);
             e.printStackTrace();
         }
+    }
+    
+    /**
+     * Показывает предупреждение о чувствительных данных и запрашивает подтверждение.
+     */
+    private boolean showSensitiveDataWarning(ScanResult scanResult) {
+        // Используем Platform.runLater для синхронного ожидания в JavaFX
+        final boolean[] confirmed = {false};
+        final Object lock = new Object();
+        
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Sensitive Data Detected");
+            alert.setHeaderText("⚠️ Warning: Sensitive Information Found");
+            alert.setContentText(scanResult.getWarningMessage());
+            
+            ButtonType continueButton = new ButtonType("Continue Anyway");
+            ButtonType cancelButton = new ButtonType("Cancel", ButtonType.ButtonData.CANCEL_CLOSE);
+            
+            alert.getButtonTypes().setAll(continueButton, cancelButton);
+            
+            alert.showAndWait().ifPresent(buttonType -> {
+                synchronized (lock) {
+                    confirmed[0] = buttonType == continueButton;
+                    lock.notify();
+                }
+            });
+        });
+        
+        // Ждем ответа пользователя
+        synchronized (lock) {
+            try {
+                lock.wait();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        
+        return confirmed[0];
+    }
+    
+    /**
+     * Расшифровывает одно сообщение.
+     */
+    private Map<String, Object> decryptMessage(Map<String, Object> message) {
+        Map<String, Object> decrypted = new HashMap<>(message);
+        String ciphertext = (String) message.get("content");
+        String room = (String) message.get("room");
+        String sender = (String) message.get("username");
+        String recipient = (String) message.get("recipient");
+        
+        if (ciphertext == null) {
+            return decrypted; // Нет контента для расшифровки
+        }
+        
+        // Проверяем, является ли это зашифрованным сообщением
+        if (!EncryptedMessage.isValidTransportFormat(ciphertext)) {
+            // Не зашифровано, возвращаем как есть
+            return decrypted;
+        }
+        
+        try {
+            javax.crypto.SecretKey key;
+            
+            if (recipient != null && recipient.equals(currentUser)) {
+                // Приватное сообщение для нас
+                if (!KeyStore.hasPairwiseKey(sender)) {
+                    // Устанавливаем pairwise ключ
+                    if (keyExchangeHandler != null) {
+                        keyExchangeHandler.establishPairwiseKey(sender);
+                    }
+                    decrypted.put("content", "[Расшифровка... Ключ устанавливается]");
+                    return decrypted;
+                }
+                key = KeyStore.getPairwiseKey(sender);
+            } else {
+                // Групповое сообщение
+                if (!KeyStore.hasRoomKey(room)) {
+                    // Запрашиваем ключ комнаты
+                    if (keyExchangeHandler != null) {
+                        keyExchangeHandler.requestRoomKey(room);
+                    }
+                    decrypted.put("content", "[Не могу расшифровать: ключ комнаты отсутствует]");
+                    return decrypted;
+                }
+                key = KeyStore.getRoomKey(room);
+            }
+            
+            // Расшифровываем
+            EncryptedMessage encrypted = EncryptedMessage.fromTransportFormat(ciphertext);
+            String plaintext = CryptoService.decryptAESGCM(encrypted, key);
+            decrypted.put("content", plaintext);
+            
+        } catch (SecurityException e) {
+            logger.warn("Failed to decrypt message: {}", e.getMessage());
+            decrypted.put("content", "[Ошибка расшифровки: сообщение повреждено или ключ неверный]");
+        } catch (Exception e) {
+            logger.error("Error decrypting message", e);
+            decrypted.put("content", "[Ошибка расшифровки]");
+        }
+        
+        return decrypted;
+    }
+    
+    /**
+     * Расшифровывает список сообщений.
+     */
+    private List<Map<String, Object>> decryptMessages(List<Map<String, Object>> messages) {
+        List<Map<String, Object>> decrypted = new ArrayList<>();
+        for (Map<String, Object> message : messages) {
+            decrypted.add(decryptMessage(message));
+        }
+        return decrypted;
     }
 
     public static void main(String[] args) {

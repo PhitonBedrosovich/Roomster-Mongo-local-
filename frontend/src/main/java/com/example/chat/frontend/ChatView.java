@@ -1,5 +1,6 @@
 package com.example.chat.frontend;
 
+import com.example.chat.frontend.crypto.KeyStore;
 import com.example.chat.frontend.service.NotificationService;
 import com.example.chat.frontend.service.RoomService;
 import javafx.geometry.Insets;
@@ -36,6 +37,7 @@ public class ChatView {
     private Button sendButton;
     private Label roomLabel;
     private Label userCountLabel;
+    private Label e2eIndicator; // Индикатор E2E защиты
 
     public ChatView(BiConsumer<String, String> onSendMessage, String room, String currentUser, String token) {
         this.onSendMessage = onSendMessage;
@@ -72,7 +74,13 @@ public class ChatView {
         userCountLabel = new Label("0 users online");
         userCountLabel.getStyleClass().add("subtitle");
         
-        headerBox.getChildren().addAll(roomLabel, userCountLabel);
+        // Индикатор E2E защиты
+        e2eIndicator = new Label("🔒 E2E Encrypted");
+        e2eIndicator.getStyleClass().add("e2e-indicator");
+        e2eIndicator.setFont(Font.font("Segoe UI", FontWeight.BOLD, 12));
+        e2eIndicator.setStyle("-fx-text-fill: #4caf50;"); // Зеленый цвет для индикации безопасности
+        
+        headerBox.getChildren().addAll(roomLabel, e2eIndicator, userCountLabel);
 
         // Основной контент
         BorderPane contentPane = new BorderPane();
@@ -208,6 +216,25 @@ public class ChatView {
             recipientCombo.getItems().addAll(users.stream().filter(user -> !user.equals(currentUser)).toList());
         }
         userCountLabel.setText(users.size() + " users online");
+        
+        // Обновляем индикатор E2E в зависимости от наличия ключа
+        updateE2EIndicator();
+    }
+    
+    /**
+     * Обновляет индикатор E2E защиты в зависимости от наличия ключа комнаты.
+     */
+    private void updateE2EIndicator() {
+        if (e2eIndicator == null) return;
+        
+        boolean hasKey = KeyStore.hasRoomKey(room);
+        if (hasKey) {
+            e2eIndicator.setText("🔒 E2E Encrypted");
+            e2eIndicator.setStyle("-fx-text-fill: #4caf50;"); // Зеленый
+        } else {
+            e2eIndicator.setText("⚠️ Waiting for key...");
+            e2eIndicator.setStyle("-fx-text-fill: #ff9800;"); // Оранжевый
+        }
     }
 
     private void loadAllUsers() {

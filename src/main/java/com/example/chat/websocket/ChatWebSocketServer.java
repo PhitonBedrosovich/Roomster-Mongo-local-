@@ -223,6 +223,65 @@ public class ChatWebSocketServer extends WebSocketServer {
                         }
                     });
                 }
+            } else if ("key_exchange".equals(type)) {
+                // Обработка обмена ключами (E2E)
+                logger.debug("Key exchange message from {} in room {}", username, room);
+                String recipient = (String) data.get("recipient");
+                
+                // Добавляем отправителя в сообщение
+                data.put("sender", username);
+                
+                if (recipient != null && !recipient.isEmpty()) {
+                    // Приватный обмен ключами: отправляем только получателю
+                    getConnections().forEach(client -> {
+                        String clientUsername = ((ClientData) client.getAttachment()).username;
+                        if (clientUsername.equals(recipient)) {
+                            try {
+                                client.send(objectMapper.writeValueAsString(data));
+                                logger.debug("Key exchange message sent to {}", clientUsername);
+                            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                                logger.error("Error sending key exchange message: {}", e.getMessage(), e);
+                            }
+                        }
+                    });
+                } else {
+                    // Broadcast в комнату (для групповых ключей)
+                    Set<WebSocket> roomSet = rooms.get(room);
+                    if (roomSet != null) {
+                        roomSet.forEach(client -> {
+                            try {
+                                client.send(objectMapper.writeValueAsString(data));
+                                logger.debug("Key exchange message broadcasted to room {}", room);
+                            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                                logger.error("Error broadcasting key exchange message: {}", e.getMessage(), e);
+                            }
+                        });
+                    }
+                }
+            } else if ("key_request".equals(type)) {
+                // Обработка запроса ключа
+                logger.debug("Key request from {} for room {}", username, room);
+                String requester = username;
+                
+                // Добавляем запрашивающего в сообщение
+                data.put("requester", requester);
+                
+                // Отправляем запрос всем в комнате (кто-то должен ответить)
+                Set<WebSocket> roomSet = rooms.get(room);
+                if (roomSet != null) {
+                    roomSet.forEach(client -> {
+                        String clientUsername = ((ClientData) client.getAttachment()).username;
+                        // Не отправляем запрос самому запрашивающему
+                        if (!clientUsername.equals(requester)) {
+                            try {
+                                client.send(objectMapper.writeValueAsString(data));
+                                logger.debug("Key request forwarded to {}", clientUsername);
+                            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                                logger.error("Error forwarding key request: {}", e.getMessage(), e);
+                            }
+                        }
+                    });
+                }
             }
         } catch (Exception e) {
             logger.error("Error processing message: {}", e.getMessage(), e);

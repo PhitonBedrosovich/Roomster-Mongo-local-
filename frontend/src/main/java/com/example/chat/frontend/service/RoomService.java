@@ -132,4 +132,53 @@ public class RoomService {
                     return null;
                 });
     }
+    
+    /**
+     * Получает публичный ключ пользователя.
+     */
+    public static CompletableFuture<Map<String, String>> getPublicKeyAsync(String username, String token) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/api/keys/users/" + username + "/public-key"))
+                        .header("Authorization", "Bearer " + token)
+                        .GET()
+                        .build();
+                
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    return objectMapper.readValue(response.body(), Map.class);
+                }
+                return null;
+            } catch (Exception e) {
+                return null;
+            }
+        });
+    }
+    
+    /**
+     * Устанавливает публичный ключ пользователя.
+     */
+    public static CompletableFuture<Boolean> setPublicKeyAsync(String username, String publicKey, String algorithm, String token) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Map<String, String> body = new java.util.HashMap<>();
+                body.put("publicKey", publicKey);
+                body.put("algorithm", algorithm != null ? algorithm : "EC");
+                
+                String bodyJson = objectMapper.writeValueAsString(body);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/api/keys/users/" + username + "/public-key"))
+                        .header("Authorization", "Bearer " + token)
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
+                        .build();
+                
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                return response.statusCode() == 200 || response.statusCode() == 201;
+            } catch (Exception e) {
+                return false;
+            }
+        });
+    }
 } 

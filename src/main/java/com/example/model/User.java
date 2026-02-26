@@ -12,6 +12,8 @@ public class User {
     private String username;
     private String password;
     private LocalDateTime registeredAt;
+    private String publicKey; // Base64 encoded EC public key
+    private String publicKeyAlgorithm; // "EC", "secp256r1"
 
     // Коснтруктор
     public User() {
@@ -27,4 +29,8 @@ public class User {
     public void setPassword(String password) { this.password = password; }
     public LocalDateTime getRegisteredAt() { return registeredAt; }
     public void setRegisteredAt(LocalDateTime registeredAt) { this.registeredAt = registeredAt; }
+    public String getPublicKey() { return publicKey; }
+    public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
+    public String getPublicKeyAlgorithm() { return publicKeyAlgorithm; }
+    public void setPublicKeyAlgorithm(String publicKeyAlgorithm) { this.publicKeyAlgorithm = publicKeyAlgorithm; }
 }

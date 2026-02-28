@@ -82,7 +82,7 @@ public class KeyExchangeController {
         user.setPublicKeyAlgorithm(algorithm != null ? algorithm : "EC");
         
         // Сохраняем пользователя
-        userService.save(user);
+        userService.saveUser(user);
         
         logger.info("Public key set successfully for user: {}", username);
         return ResponseEntity.ok(Map.of("message", "Public key set successfully"));

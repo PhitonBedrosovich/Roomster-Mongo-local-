@@ -19,6 +19,7 @@ import java.net.URI;
 import java.security.KeyPair;
 import java.util.*;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -274,7 +275,25 @@ public class ChatClient extends Application {
                             });
                         } else if ("users".equals(type)) {
                             UsersPayload payload = objectMapper.readValue(message, UsersPayload.class);
-                            Platform.runLater(() -> chatView.updateUsers(payload.users));
+                            Platform.runLater(() -> {
+                                chatView.updateUsers(payload.users);
+                                // Если мы одни в комнате и ключа еще нет — создаем room key локально.
+                                // Когда второй пользователь присоединится и запросит ключ, мы ему ответим.
+                                try {
+                                    if (payload.users != null
+                                            && payload.users.size() == 1
+                                            && payload.users.contains(currentUser)
+                                            && !KeyStore.hasRoomKey(room)) {
+                                        javax.crypto.SecretKey roomKey = CryptoService.generateAES256Key();
+                                        KeyStore.saveRoomKey(room, roomKey);
+                                        logger.info("Generated room key for room {} (single participant)", room);
+                                        // Обновим индикатор в UI через updateUsers() при следующем событии,
+                                        // либо пользователь увидит обновление при любом следующем обновлении списка.
+                                    }
+                                } catch (Exception e) {
+                                    logger.error("Failed to generate room key on users update", e);
+                                }
+                            });
                         } else if ("key_exchange".equals(type)) {
                             // Обрабатываем обмен ключами
                             if (keyExchangeHandler != null) {
@@ -349,8 +368,14 @@ public class ChatClient extends Application {
                         if (keyExchangeHandler != null) {
                             keyExchangeHandler.establishPairwiseKey(recipient);
                         }
-                        // Ждем немного для установки ключа (упрощенная версия)
-                        Thread.sleep(500);
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                            alert.setTitle("Key Establishment");
+                            alert.setHeaderText("Setting up private encryption key...");
+                            alert.setContentText("Please wait a moment and send again.");
+                            alert.showAndWait();
+                        });
+                        return;
                     }
                     
                     javax.crypto.SecretKey pairwiseKey = KeyStore.getPairwiseKey(recipient);
@@ -416,40 +441,40 @@ public class ChatClient extends Application {
      * Показывает предупреждение о чувствительных данных и запрашивает подтверждение.
      */
     private boolean showSensitiveDataWarning(ScanResult scanResult) {
-        // Используем Platform.runLater для синхронного ожидания в JavaFX
-        final boolean[] confirmed = {false};
-        final Object lock = new Object();
-        
+        // Важно: sendMessage() вызывается из UI-потока JavaFX.
+        // Если здесь блокировать UI-поток и при этом пытаться показать Alert через Platform.runLater(),
+        // получится deadlock. Поэтому:
+        // - если мы уже в FX-потоке: показываем showAndWait() напрямую
+        // - иначе: показываем через Platform.runLater() и ждем через CompletableFuture
+
+        ButtonType continueButton = new ButtonType("Continue Anyway");
+        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        if (Platform.isFxApplicationThread()) {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Sensitive Data Detected");
+            alert.setHeaderText("⚠️ Warning: Sensitive Information Found");
+            alert.setContentText(scanResult.getWarningMessage());
+            alert.getButtonTypes().setAll(continueButton, cancelButton);
+            return alert.showAndWait().map(bt -> bt == continueButton).orElse(false);
+        }
+
+        java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("Sensitive Data Detected");
             alert.setHeaderText("⚠️ Warning: Sensitive Information Found");
             alert.setContentText(scanResult.getWarningMessage());
-            
-            ButtonType continueButton = new ButtonType("Continue Anyway");
-            ButtonType cancelButton = new ButtonType("Cancel", ButtonType.ButtonData.CANCEL_CLOSE);
-            
             alert.getButtonTypes().setAll(continueButton, cancelButton);
-            
-            alert.showAndWait().ifPresent(buttonType -> {
-                synchronized (lock) {
-                    confirmed[0] = buttonType == continueButton;
-                    lock.notify();
-                }
-            });
+            boolean result = alert.showAndWait().map(bt -> bt == continueButton).orElse(false);
+            future.complete(result);
         });
-        
-        // Ждем ответа пользователя
-        synchronized (lock) {
-            try {
-                lock.wait();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
+        try {
+            return future.get();
+        } catch (Exception e) {
+            logger.error("Failed to show sensitive data warning", e);
+            return false;
         }
-        
-        return confirmed[0];
     }
     
     /**

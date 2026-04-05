@@ -66,35 +66,35 @@ public class ChatView {
         // Заголовок комнаты
         HBox headerBox = new HBox(15);
         headerBox.setAlignment(Pos.CENTER_LEFT);
-        
+
         roomLabel = new Label("Room: " + room);
         roomLabel.getStyleClass().add("title");
         roomLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 20));
-        
+
         userCountLabel = new Label("0 users online");
         userCountLabel.getStyleClass().add("subtitle");
-        
+
         // Индикатор E2E защиты
         e2eIndicator = new Label("🔒 E2E Encrypted");
         e2eIndicator.getStyleClass().add("e2e-indicator");
         e2eIndicator.setFont(Font.font("Segoe UI", FontWeight.BOLD, 12));
         e2eIndicator.setStyle("-fx-text-fill: #4caf50;"); // Зеленый цвет для индикации безопасности
-        
+
         headerBox.getChildren().addAll(roomLabel, e2eIndicator, userCountLabel);
 
         // Основной контент
         BorderPane contentPane = new BorderPane();
-        
+
         // Список сообщений (центр)
         VBox messageContainer = new VBox(10);
         messageContainer.getStyleClass().add("message-container");
-        
+
         Label messageLabel = new Label("Messages");
         messageLabel.getStyleClass().add("subtitle");
-        
+
         messageList.setPrefHeight(400);
         messageList.setCellFactory(param -> new MessageListCell());
-        
+
         messageContainer.getChildren().addAll(messageLabel, messageList);
         contentPane.setCenter(messageContainer);
 
@@ -102,45 +102,45 @@ public class ChatView {
         VBox userContainer = new VBox(10);
         userContainer.setPrefWidth(200);
         userContainer.getStyleClass().add("user-container");
-        
+
         Label userLabel = new Label("Online Users");
         userLabel.getStyleClass().add("subtitle");
-        
+
         userList.setPrefHeight(400);
         userList.setCellFactory(param -> new UserListCell());
-        
+
         userContainer.getChildren().addAll(userLabel, userList);
         contentPane.setRight(userContainer);
 
         // Поле ввода сообщений
         VBox inputContainer = new VBox(10);
         inputContainer.getStyleClass().add("input-container");
-        
+
         HBox inputBox = new HBox(10);
         inputBox.setAlignment(Pos.CENTER_LEFT);
-        
+
         messageField = new TextField();
         messageField.setPromptText("Type a message...");
         messageField.setPrefHeight(40);
         messageField.setPrefWidth(400);
-        
+
         recipientCombo = new ComboBox<>();
         recipientCombo.setPromptText("Send to all");
         recipientCombo.setPrefWidth(150);
         recipientCombo.setPrefHeight(40);
-        
+
         sendButton = new Button("Send");
         sendButton.getStyleClass().addAll("success", "primary");
         sendButton.setPrefWidth(100);
         sendButton.setPrefHeight(40);
-        
+
         inputBox.getChildren().addAll(messageField, recipientCombo, sendButton);
         inputContainer.getChildren().add(inputBox);
 
         // Обработчики событий
         sendButton.setOnAction(e -> sendMessage());
         messageField.setOnAction(e -> sendMessage());
-        
+
         // Двойной клик на пользователя для приватного сообщения
         userList.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
@@ -186,6 +186,31 @@ public class ChatView {
         scrollToBottom();
     }
 
+    /**
+     * Обновляет содержимое одного сообщения в списке по совпадению username + timestamp.
+     * Используется для повторной расшифровки после асинхронной установки ключа.
+     */
+    public void updateSingleMessage(Map<String, Object> updatedMsg) {
+        String username = (String) updatedMsg.get("username");
+        String timestamp = (String) updatedMsg.get("timestamp");
+        String newContent = (String) updatedMsg.get("content");
+
+        for (int i = 0; i < messageList.getItems().size(); i++) {
+            MessageItem item = messageList.getItems().get(i);
+            if (item.getUsername().equals(username)
+                    && java.util.Objects.equals(item.getTimestamp(), timestamp)) {
+                String recipient = (String) updatedMsg.get("recipient");
+                boolean isPrivate = recipient != null && !recipient.isEmpty();
+                MessageItem updated = new MessageItem(
+                        username, newContent, timestamp,
+                        item.isOwn(), isPrivate, recipient
+                );
+                messageList.getItems().set(i, updated);
+                break;
+            }
+        }
+    }
+
     public void addMessage(Map<String, Object> msg) {
         String recipient = (String) msg.get("recipient");
         String username = (String) msg.get("username");
@@ -197,9 +222,9 @@ public class ChatView {
             // Уведомление о новом сообщении (если не от текущего пользователя)
             if (!username.equals(currentUser)) {
                 String content = (String) msg.get("content");
-                String notificationText = msg.containsKey("recipient") ? 
-                    "Private message from " + username : 
-                    username + ": " + content;
+                String notificationText = msg.containsKey("recipient") ?
+                        "Private message from " + username :
+                        username + ": " + content;
                 NotificationService.showNotification("New Message", notificationText, NotificationService.NotificationType.INFO);
             }
         }
@@ -216,17 +241,17 @@ public class ChatView {
             recipientCombo.getItems().addAll(users.stream().filter(user -> !user.equals(currentUser)).toList());
         }
         userCountLabel.setText(users.size() + " users online");
-        
+
         // Обновляем индикатор E2E в зависимости от наличия ключа
         updateE2EIndicator();
     }
-    
+
     /**
      * Обновляет индикатор E2E защиты в зависимости от наличия ключа комнаты.
      */
-    private void updateE2EIndicator() {
+    public void updateE2EIndicator() {
         if (e2eIndicator == null) return;
-        
+
         boolean hasKey = KeyStore.hasRoomKey(room);
         if (hasKey) {
             e2eIndicator.setText("🔒 E2E Encrypted");
@@ -251,10 +276,10 @@ public class ChatView {
         String content = (String) msg.get("content");
         String timestamp = (String) msg.get("timestamp");
         String recipient = (String) msg.get("recipient");
-        
+
         boolean isOwn = username.equals(currentUser);
         boolean isPrivate = recipient != null && !recipient.isEmpty();
-        
+
         return new MessageItem(username, content, timestamp, isOwn, isPrivate, recipient);
     }
 
@@ -398,21 +423,21 @@ public class ChatView {
                 HBox container = new HBox(10);
                 container.setAlignment(Pos.CENTER_LEFT);
                 container.setPadding(new Insets(5));
-                
+
                 Label usernameLabel = new Label(item.getUsername());
                 if (item.isCurrentUser()) {
                     usernameLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 12));
                     usernameLabel.setText(usernameLabel.getText() + " (You)");
                 }
-                
+
                 container.getChildren().add(usernameLabel);
-                
+
                 getStyleClass().clear();
                 getStyleClass().add("user-item");
                 if (item.isCurrentUser()) {
                     getStyleClass().add("online");
                 }
-                
+
                 setGraphic(container);
                 setText(null);
             }

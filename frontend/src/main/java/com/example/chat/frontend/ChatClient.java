@@ -1,6 +1,7 @@
 package com.example.chat.frontend;
 
 import com.example.chat.frontend.crypto.*;
+import com.example.chat.frontend.crypto.PersistentKeyStore;
 import com.example.chat.frontend.detection.SensitiveDataDetector;
 import com.example.chat.frontend.detection.ScanResult;
 import com.example.chat.frontend.service.RoomService;
@@ -18,9 +19,13 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 import java.security.KeyPair;
 import java.util.*;
+import java.util.Arrays;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.control.Button;
@@ -34,19 +39,22 @@ import javafx.stage.StageStyle;
 
 public class ChatClient extends Application {
     private static final Logger logger = LoggerFactory.getLogger(ChatClient.class);
-    private static WebSocketClient wsClient;
-    private static ObjectMapper objectMapper = new ObjectMapper();
-    private static ChatView chatView;
-    private static String token;
-    private static String currentUser;
+    // Поля намеренно НЕ static: каждый экземпляр Application имеет своё соединение
+    private WebSocketClient wsClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private ChatView chatView;
+    private String token;
+    private String currentUser;
     private NavigationController navigationController;
     private BorderPane rootPane;
     private NavigationBar navigationBar;
     private String currentToken;
-    
+
     // Криптографические компоненты
-    private static SensitiveDataDetector sensitiveDataDetector;
-    private static KeyExchangeHandler keyExchangeHandler;
+    private SensitiveDataDetector sensitiveDataDetector;
+    private KeyExchangeHandler keyExchangeHandler;
+    // Пароль keystore хранится в памяти на время сессии для автосохранения
+    private char[] keystorePassword;
 
     // Вспомогательные классы для десериализации
     private static class HistoryPayload {
@@ -134,18 +142,136 @@ public class ChatClient extends Application {
     private void onLoginSuccess(String receivedToken) {
         token = receivedToken;
         currentToken = receivedToken;
-        // Извлекаем имя пользователя из токена (в реальном приложении это должно приходить с сервера)
         currentUser = extractUsernameFromToken(token);
         navigationBar.updateUser(currentUser);
         navigationBar.updateToken(currentToken);
-        
-        // Инициализируем криптографические компоненты
-        initializeCryptography(currentUser);
-        
-        RoomListView roomListView = new RoomListView(this::onRoomSelected, token);
-        navigationController.navigateTo(roomListView.getNode(this));
+
+        // ВАЖНО: сначала показываем диалог keystore и загружаем сохранённые ключи,
+        // и только ПОСЛЕ этого инициализируем крипто.
+        // Если сделать наоборот — initializeCryptography сгенерирует новые ключи
+        // и загрузит новый публичный ключ на сервер, после чего старые ключи из
+        // keystore станут несовместимы с тем что хранится на сервере.
+        showKeystorePasswordDialog(currentUser, () -> {
+            // Keystore уже загружен (или пропущен) — теперь безопасно инициализировать крипто
+            initializeCryptography(currentUser);
+            RoomListView roomListView = new RoomListView(this::onRoomSelected, token);
+            navigationController.navigateTo(roomListView.getNode(this));
+        });
     }
-    
+
+    /**
+     * Показывает диалог для ввода пароля keystore.
+     * Если keystore существует — расшифровывает и загружает ключи.
+     * Если нет — предлагает создать новый с этим паролем.
+     * После успеха вызывает onDone.
+     */
+    private void showKeystorePasswordDialog(String username, Runnable onDone) {
+        boolean exists = PersistentKeyStore.keystoreExists(username);
+
+        Dialog<char[]> dialog = new Dialog<>();
+        dialog.setTitle("Key Storage");
+        dialog.setHeaderText(exists
+                ? "🔑 Enter your keystore password to decrypt saved keys"
+                : "🔑 Create a keystore password to protect your keys");
+
+        ButtonType okButton     = new ButtonType("OK", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        ButtonType skipButton   = new ButtonType("Skip (keys won't persist)", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(okButton, skipButton);
+
+        PasswordField pwField = new PasswordField();
+        pwField.setPromptText("Keystore password");
+        pwField.setPrefWidth(280);
+
+        Label infoLabel = new Label(exists
+                ? "Your encryption keys from previous sessions will be restored."
+                : "This password protects your encryption keys on disk.\nYou'll need it every time you start the app.");
+        infoLabel.setWrapText(true);
+
+        Label errorLabel = new Label();
+        errorLabel.setStyle("-fx-text-fill: #e53935;");
+        errorLabel.setVisible(false);
+
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10, infoLabel, pwField, errorLabel);
+        content.setPadding(new Insets(10));
+        dialog.getDialogPane().setContent(content);
+
+        // Фокус на поле пароля
+        dialog.getDialogPane().lookupButton(okButton).setDisable(true);
+        pwField.textProperty().addListener((obs, o, n) ->
+                dialog.getDialogPane().lookupButton(okButton).setDisable(n.trim().isEmpty()));
+
+        // Enter подтверждает
+        pwField.setOnAction(e -> {
+            if (!pwField.getText().trim().isEmpty()) {
+                ((Button) dialog.getDialogPane().lookupButton(okButton)).fire();
+            }
+        });
+
+        dialog.setResultConverter(btn -> {
+            if (btn == okButton) return pwField.getText().toCharArray();
+            return null; // Skip
+        });
+
+        // Показываем диалог в цикле пока не введут правильный пароль (или Skip)
+        showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
+    }
+
+    private void showKeystoreDialogLoop(Dialog<char[]> dialog, ButtonType okButton,
+                                        Label errorLabel, PasswordField pwField,
+                                        String username, boolean exists, Runnable onDone) {
+        dialog.showAndWait().ifPresentOrElse(password -> {
+            if (password == null) {
+                // Пользователь нажал Skip
+                logger.info("User skipped keystore — keys won't be persisted");
+                onDone.run();
+                return;
+            }
+
+            if (exists) {
+                // Пытаемся загрузить
+                try {
+                    PersistentKeyStore.load(username, password);
+                    logger.info("Keystore loaded successfully for {}", username);
+                    keystorePassword = password; // запоминаем для автосохранения
+                    onDone.run();
+                } catch (SecurityException e) {
+                    // Неверный пароль — показываем снова
+                    Arrays.fill(password, '\0');
+                    errorLabel.setText("Wrong password, try again.");
+                    errorLabel.setVisible(true);
+                    pwField.clear();
+                    showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
+                } catch (Exception e) {
+                    logger.error("Failed to load keystore", e);
+                    Arrays.fill(password, '\0');
+                    errorLabel.setText("Failed to load keystore: " + e.getMessage());
+                    errorLabel.setVisible(true);
+                    pwField.clear();
+                    showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
+                }
+            } else {
+                // Сохраняем новый keystore с текущими (только что сгенерированными) ключами
+                try {
+                    PersistentKeyStore.save(username, password);
+                    logger.info("New keystore created for {}", username);
+                    keystorePassword = password; // запоминаем для автосохранения
+                    onDone.run();
+                } catch (Exception e) {
+                    logger.error("Failed to create keystore", e);
+                    Arrays.fill(password, '\0');
+                    errorLabel.setText("Failed to create keystore: " + e.getMessage());
+                    errorLabel.setVisible(true);
+                    pwField.clear();
+                    showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
+                }
+            }
+        }, () -> {
+            // Dialog closed without result (Skip)
+            logger.info("Keystore dialog closed — keys won't be persisted");
+            onDone.run();
+        });
+    }
+
     /**
      * Инициализирует криптографические компоненты при входе пользователя.
      */
@@ -153,36 +279,51 @@ public class ChatClient extends Application {
         try {
             // Инициализируем детектор чувствительных данных
             sensitiveDataDetector = new SensitiveDataDetector();
-            
+
             // Проверяем, есть ли уже identity ключи
             if (!KeyStore.hasIdentityKeys()) {
                 // Генерируем новую пару ключей
                 KeyPair identityKeyPair = CryptoService.generateECKeyPair();
                 KeyStore.saveIdentityKeyPair(identityKeyPair, username);
-                
+
                 // Отправляем публичный ключ на сервер
                 String publicKeyBase64 = CryptoService.publicKeyToBase64(identityKeyPair.getPublic());
                 RoomService.setPublicKeyAsync(username, publicKeyBase64, "EC", token)
-                    .thenAccept(success -> {
-                        if (success) {
-                            logger.info("Public key uploaded to server successfully");
-                        } else {
-                            logger.warn("Failed to upload public key to server");
-                        }
-                    });
+                        .thenAccept(success -> {
+                            if (success) {
+                                logger.info("Public key uploaded to server successfully");
+                            } else {
+                                logger.warn("Failed to upload public key to server");
+                            }
+                        });
+            } else {
+                // Ключи уже есть (загружены из keystore) — обновляем публичный ключ на сервере,
+                // т.к. после перезапуска сервер мог потерять его из памяти/БД.
+                String publicKeyBase64 = KeyStore.exportPublicKeyBase64();
+                if (publicKeyBase64 != null) {
+                    RoomService.setPublicKeyAsync(username, publicKeyBase64, "EC", token)
+                            .thenAccept(success -> {
+                                if (success) {
+                                    logger.info("Public key re-uploaded to server after keystore load");
+                                } else {
+                                    logger.warn("Failed to re-upload public key to server");
+                                }
+                            });
+                }
             }
-            
+
             // Инициализируем обработчик обмена ключами
             keyExchangeHandler = new KeyExchangeHandler(
-                json -> {
-                    if (wsClient != null && wsClient.isOpen()) {
-                        wsClient.send(json);
-                    }
-                },
-                username,
-                token
+                    json -> {
+                        if (wsClient != null && wsClient.isOpen()) {
+                            wsClient.send(json);
+                        }
+                    },
+                    username,
+                    token,
+                    () -> autoSaveKeystore(username)  // автосохранение при каждом новом ключе
             );
-            
+
             logger.info("Cryptography initialized for user: {}", username);
         } catch (Exception e) {
             logger.error("Error initializing cryptography", e);
@@ -208,7 +349,39 @@ public class ChatClient extends Application {
         navigationController.navigateTo(chatView.getNode(this));
     }
 
+    /**
+     * Автоматически сохраняет keystore при получении нового ключа.
+     * Вызывается из KeyExchangeHandler через колбэк.
+     * Использует пароль сохранённый в памяти — пользователь ничего не видит.
+     */
+    /**
+     * Автоматически сохраняет keystore при получении нового ключа.
+     * Вызывается из KeyExchangeHandler через колбэк.
+     * Также обновляет E2E индикатор в UI — потому что updateUsers приходит
+     * не всегда после key_exchange, и без этого индикатор остаётся оранжевым.
+     */
+    private void autoSaveKeystore(String username) {
+        if (keystorePassword == null || username == null) return;
+        try {
+            PersistentKeyStore.save(username, keystorePassword);
+            logger.info("Keystore auto-saved for {}", username);
+        } catch (Exception e) {
+            logger.warn("Auto-save keystore failed for {}: {}", username, e.getMessage());
+        }
+        // Обновляем E2E индикатор в UI после получения нового ключа
+        Platform.runLater(() -> {
+            if (chatView != null) {
+                chatView.updateE2EIndicator();
+            }
+        });
+    }
+
     private void goHome() {
+        // Сохраняем ключи на диск перед выходом (если keystore уже существует)
+        if (currentUser != null && PersistentKeyStore.keystoreExists(currentUser)) {
+            showSaveKeystoreDialog(currentUser);
+        }
+
         // Сброс токена и закрытие WebSocket
         token = null;
         currentUser = null;
@@ -223,12 +396,73 @@ public class ChatClient extends Application {
         KeyStore.clear();
         sensitiveDataDetector = null;
         keyExchangeHandler = null;
+        if (keystorePassword != null) {
+            Arrays.fill(keystorePassword, '\0');
+            keystorePassword = null;
+        }
         LoginView loginView = new LoginView(this::onLoginSuccess);
         navigationController.setRoot(loginView.getNode(this));
     }
 
+    /**
+     * Показывает диалог сохранения keystore при выходе.
+     */
+    private void showSaveKeystoreDialog(String username) {
+        Dialog<char[]> dialog = new Dialog<>();
+        dialog.setTitle("Save Keys");
+        dialog.setHeaderText("💾 Save your encryption keys before logging out?");
+
+        ButtonType saveBtn = new ButtonType("Save", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        ButtonType skipBtn = new ButtonType("Skip", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveBtn, skipBtn);
+
+        PasswordField pwField = new PasswordField();
+        pwField.setPromptText("Keystore password");
+        pwField.setPrefWidth(280);
+
+        Label errorLabel = new Label();
+        errorLabel.setStyle("-fx-text-fill: #e53935;");
+        errorLabel.setVisible(false);
+
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10,
+                new Label("Enter your keystore password to save updated keys (room & pairwise)."),
+                pwField, errorLabel);
+        content.setPadding(new Insets(10));
+        dialog.getDialogPane().setContent(content);
+
+        dialog.getDialogPane().lookupButton(saveBtn).setDisable(true);
+        pwField.textProperty().addListener((obs, o, n) ->
+                dialog.getDialogPane().lookupButton(saveBtn).setDisable(n.trim().isEmpty()));
+
+        dialog.setResultConverter(btn -> btn == saveBtn ? pwField.getText().toCharArray() : null);
+
+        dialog.showAndWait().ifPresent(password -> {
+            if (password == null) return;
+            try {
+                PersistentKeyStore.save(username, password);
+                logger.info("Keystore saved on logout for {}", username);
+            } catch (Exception e) {
+                logger.error("Failed to save keystore on logout", e);
+            } finally {
+                Arrays.fill(password, '\0');
+            }
+        });
+    }
+
     private void connectWebSocket(String token, String room) {
         try {
+            // Закрываем старое соединение без блокировки UI-потока.
+            // close() отправляет CLOSE-фрейм асинхронно — нам этого достаточно,
+            // новый wsClient создаём сразу после, они не мешают друг другу.
+            if (wsClient != null) {
+                try {
+                    wsClient.close();
+                } catch (Exception e) {
+                    logger.warn("Error closing previous WebSocket connection", e);
+                }
+                wsClient = null;
+            }
+
             // Создаем WebSocket клиент с кастомными заголовками для передачи токена
             wsClient = new WebSocketClient(new URI("ws://localhost:8082")) {
                 @Override
@@ -238,11 +472,8 @@ public class ChatClient extends Application {
                     joinMessage.put("room", room);
                     try {
                         send(objectMapper.writeValueAsString(joinMessage));
-                        
-                        // Проверяем наличие ключа комнаты и запрашиваем, если нет
-                        if (!KeyStore.hasRoomKey(room) && keyExchangeHandler != null) {
-                            keyExchangeHandler.requestRoomKey(room);
-                        }
+                        // key_request НЕ отправляем здесь — сервер ещё не добавил нас в комнату.
+                        // Запрос ключа делаем после получения "history" (join уже обработан сервером).
                     } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                         e.printStackTrace();
                     }
@@ -253,15 +484,19 @@ public class ChatClient extends Application {
                     try {
                         // Определяем тип сообщения
                         Map<String, Object> typeProbe = objectMapper.readValue(
-                            message, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+                                message, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
                         );
                         String type = (String) typeProbe.get("type");
-                        
+
                         if ("auth_success".equals(type)) {
                             // Аутентификация успешна
                         } else if ("history".equals(type)) {
                             HistoryPayload payload = objectMapper.readValue(message, HistoryPayload.class);
-                            // Расшифровываем историю сообщений
+                            // Сервер отправляет history сразу после обработки join —
+                            // значит мы уже в комнате и можно безопасно запросить ключ.
+                            if (!KeyStore.hasRoomKey(room) && keyExchangeHandler != null) {
+                                keyExchangeHandler.requestRoomKey(room);
+                            }
                             Platform.runLater(() -> {
                                 List<Map<String, Object>> decryptedMessages = decryptMessages(payload.messages);
                                 chatView.updateMessages(decryptedMessages);
@@ -331,11 +566,11 @@ public class ChatClient extends Application {
                     ex.printStackTrace();
                 }
             };
-            
+
             // Добавляем заголовок с токеном
             wsClient.addHeader("Authorization", "Bearer " + token);
             wsClient.connect();
-            
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -355,11 +590,11 @@ public class ChatClient extends Application {
                     }
                 }
             }
-            
+
             // 2. Шифрование сообщения
             String ciphertext;
             String room = chatView.getRoom();
-            
+
             try {
                 if (recipient != null && !recipient.isEmpty()) {
                     // Приватное сообщение: используем pairwise ключ
@@ -377,12 +612,12 @@ public class ChatClient extends Application {
                         });
                         return;
                     }
-                    
+
                     javax.crypto.SecretKey pairwiseKey = KeyStore.getPairwiseKey(recipient);
                     if (pairwiseKey == null) {
                         throw new IllegalStateException("Pairwise key not available for user: " + recipient);
                     }
-                    
+
                     EncryptedMessage encrypted = CryptoService.encryptAESGCM(message, pairwiseKey);
                     ciphertext = encrypted.toTransportFormat();
                 } else {
@@ -402,7 +637,7 @@ public class ChatClient extends Application {
                         });
                         return;
                     }
-                    
+
                     javax.crypto.SecretKey roomKey = KeyStore.getRoomKey(room);
                     EncryptedMessage encrypted = CryptoService.encryptAESGCM(message, roomKey);
                     ciphertext = encrypted.toTransportFormat();
@@ -418,7 +653,7 @@ public class ChatClient extends Application {
                 });
                 return;
             }
-            
+
             // 3. Отправка зашифрованного сообщения
             Map<String, Object> msg = new HashMap<>();
             msg.put("type", "message");
@@ -429,14 +664,14 @@ public class ChatClient extends Application {
             }
             String jsonMessage = objectMapper.writeValueAsString(msg);
             wsClient.send(jsonMessage);
-            
+
             logger.debug("Encrypted message sent successfully");
         } catch (Exception e) {
             logger.error("Error sending message", e);
             e.printStackTrace();
         }
     }
-    
+
     /**
      * Показывает предупреждение о чувствительных данных и запрашивает подтверждение.
      */
@@ -479,6 +714,8 @@ public class ChatClient extends Application {
 
     /**
      * Расшифровывает одно сообщение.
+     * Если pairwise ключ ещё не установлен — запускает асинхронную установку
+     * и повторяет расшифровку после её завершения (обновляет UI через updateSingleMessage).
      */
     private Map<String, Object> decryptMessage(Map<String, Object> message) {
         Map<String, Object> decrypted = new HashMap<>(message);
@@ -488,12 +725,10 @@ public class ChatClient extends Application {
         String recipient = (String) message.get("recipient");
 
         if (ciphertext == null) {
-            return decrypted; // Нет контента для расшифровки
+            return decrypted;
         }
 
-        // Проверяем, является ли это зашифрованным сообщением
         if (!EncryptedMessage.isValidTransportFormat(ciphertext)) {
-            // Не зашифровано, возвращаем как есть
             return decrypted;
         }
 
@@ -502,32 +737,33 @@ public class ChatClient extends Application {
             boolean isPrivate = recipient != null && !recipient.isEmpty();
 
             if (isPrivate) {
-                // Приватное сообщение
+                // Определяем peer: для получателя это отправитель, для отправителя — получатель
+                String peerUsername;
                 if (currentUser.equals(recipient)) {
-                    // Я получатель приватного сообщения -> ключ с отправителем
-                    if (!KeyStore.hasPairwiseKey(sender)) {
-                        if (keyExchangeHandler != null) {
-                            keyExchangeHandler.establishPairwiseKey(sender);
-                        }
-                        decrypted.put("content", "[Расшифровка... Ключ устанавливается]");
-                        return decrypted;
-                    }
-                    key = KeyStore.getPairwiseKey(sender);
+                    peerUsername = sender;
                 } else if (currentUser.equals(sender)) {
-                    // Я отправитель приватного сообщения -> ключ с получателем
-                    if (!KeyStore.hasPairwiseKey(recipient)) {
-                        if (keyExchangeHandler != null) {
-                            keyExchangeHandler.establishPairwiseKey(recipient);
-                        }
-                        decrypted.put("content", "[Расшифровка... Ключ устанавливается]");
-                        return decrypted;
-                    }
-                    key = KeyStore.getPairwiseKey(recipient);
+                    peerUsername = recipient;
                 } else {
-                    // Мы не участник приватного сообщения
                     decrypted.put("content", "[Не могу расшифровать: не участник приватного сообщения]");
                     return decrypted;
                 }
+
+                if (!KeyStore.hasPairwiseKey(peerUsername)) {
+                    // Ключ ещё не готов — устанавливаем асинхронно через ECDH.
+                    // ECDH симметричен: sharedSecret(A_priv, B_pub) == sharedSecret(B_priv, A_pub),
+                    // поэтому получателю не нужно ждать никакого key_exchange от отправителя.
+                    if (keyExchangeHandler != null) {
+                        final Map<String, Object> originalMessage = message;
+                        keyExchangeHandler.establishPairwiseKeyAsync(peerUsername, () -> {
+                            Map<String, Object> retried = decryptMessage(originalMessage);
+                            Platform.runLater(() -> chatView.updateSingleMessage(retried));
+                        });
+                    }
+                    decrypted.put("content", "[Устанавливается ключ шифрования...]");
+                    return decrypted;
+                }
+                key = KeyStore.getPairwiseKey(peerUsername);
+
             } else {
                 // Групповое сообщение
                 if (!KeyStore.hasRoomKey(room)) {
@@ -540,7 +776,6 @@ public class ChatClient extends Application {
                 key = KeyStore.getRoomKey(room);
             }
 
-            // Расшифровываем
             EncryptedMessage encrypted = EncryptedMessage.fromTransportFormat(ciphertext);
             String plaintext = CryptoService.decryptAESGCM(encrypted, key);
             decrypted.put("content", plaintext);
@@ -555,7 +790,7 @@ public class ChatClient extends Application {
 
         return decrypted;
     }
-    
+
     /**
      * Расшифровывает список сообщений.
      */

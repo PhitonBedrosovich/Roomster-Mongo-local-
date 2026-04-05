@@ -37,7 +37,7 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     @Autowired
     private MongoTemplate mongoTemplate;
-    
+
     @Autowired
     private UserService userService;
 
@@ -59,14 +59,14 @@ public class ChatWebSocketServer extends WebSocketServer {
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         logger.info("WebSocket connection opened: {}", conn.getRemoteSocketAddress());
-        
+
         String token = extractToken(handshake);
         if (token == null) {
             logger.warn("No token provided in WebSocket connection from: {}", conn.getRemoteSocketAddress());
             conn.close(1008, "Authentication required");
             return;
         }
-        
+
         try {
             // Проверяем, не истек ли токен
             if (jwtUtil.isTokenExpired(token)) {
@@ -74,9 +74,9 @@ public class ChatWebSocketServer extends WebSocketServer {
                 conn.close(1008, "Token expired");
                 return;
             }
-            
+
             String username = jwtUtil.getUsernameFromToken(token);
-            
+
             // Проверяем, существует ли пользователь в базе данных
             User user = userService.findByUsername(username);
             if (user == null) {
@@ -84,22 +84,22 @@ public class ChatWebSocketServer extends WebSocketServer {
                 conn.close(1008, "User not found");
                 return;
             }
-            
+
             conn.setAttachment(new ClientData(username, null));
             logger.info("User authenticated successfully: {}", username);
             logger.debug("Token expires at: {}", jwtUtil.getExpirationDateFromToken(token));
-            
+
             // Отправляем подтверждение успешной аутентификации
             try {
                 conn.send(objectMapper.writeValueAsString(Map.of(
-                    "type", "auth_success",
-                    "username", username,
-                    "expiresAt", jwtUtil.getExpirationDateFromToken(token).toString()
+                        "type", "auth_success",
+                        "username", username,
+                        "expiresAt", jwtUtil.getExpirationDateFromToken(token).toString()
                 )));
             } catch (Exception e) {
                 logger.error("Error sending auth success message: {}", e.getMessage(), e);
             }
-            
+
         } catch (ExpiredJwtException e) {
             logger.warn("JWT token expired for connection: {}", conn.getRemoteSocketAddress());
             conn.close(1008, "Token expired");
@@ -121,13 +121,13 @@ public class ChatWebSocketServer extends WebSocketServer {
         if (token != null && token.startsWith("Bearer ")) {
             return token.substring(7);
         }
-        
+
         // Если нет в заголовке, пытаемся из URL параметра (для обратной совместимости)
         String resourceDescriptor = handshake.getResourceDescriptor();
         if (resourceDescriptor.contains("?token=")) {
             return resourceDescriptor.split("\\?token=")[1];
         }
-        
+
         return null;
     }
 
@@ -151,7 +151,7 @@ public class ChatWebSocketServer extends WebSocketServer {
         logger.debug("Message received: {}", message);
         try {
             Map<String, Object> data = objectMapper.readValue(
-                message, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+                    message, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
             );
             String type = (String) data.get("type");
             String room = (String) data.get("room");
@@ -171,8 +171,8 @@ public class ChatWebSocketServer extends WebSocketServer {
                 List<Message> history = messageService.getRoomMessages(room, userRegisteredAt);
                 try {
                     conn.send(objectMapper.writeValueAsString(Map.of("type", "history", "messages", history)));
-                    logger.info("Sent {} filtered history messages to {} (registered at: {})", 
-                              history.size(), username, userRegisteredAt);
+                    logger.info("Sent {} filtered history messages to {} (registered at: {})",
+                            history.size(), username, userRegisteredAt);
                 } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                     logger.error("Error sending history messages: {}", e.getMessage(), e);
                 }
@@ -193,44 +193,23 @@ public class ChatWebSocketServer extends WebSocketServer {
                 LocalDateTime userRegisteredAt = user != null ? user.getRegisteredAt() : LocalDateTime.now();
                 messageService.invalidateRoomCache(room, userRegisteredAt);
 
-                // Публикуем сообщение в Redis для горизонтального масштабирования
+                // Публикуем сообщение в Redis — broadcastFromRedis() сам разошлёт по WebSocket.
+                // Прямой broadcast убран, чтобы не дублировать: иначе каждый клиент получал бы
+                // сообщение дважды (напрямую + через Redis-подписчика).
                 try {
                     String msgJson = objectMapper.writeValueAsString(msg);
                     redisTemplate.convertAndSend(REDIS_CHANNEL, msgJson);
                 } catch (Exception e) {
                     logger.error("Error publishing message to Redis: {}", e.getMessage(), e);
                 }
-
-                if (msg.isPrivate()) {
-                    getConnections().forEach(client -> {
-                        String clientUsername = ((ClientData) client.getAttachment()).username;
-                        if (clientUsername.equals(username) || clientUsername.equals(msg.getRecipient())) {
-                            try {
-                                client.send(objectMapper.writeValueAsString(Map.of("type", "message", "message", msg)));
-                                logger.debug("Private message sent to {}", clientUsername);
-                            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                                logger.error("Error sending private message: {}", e.getMessage(), e);
-                            }
-                        }
-                    });
-                } else {
-                    rooms.get(room).forEach(client -> {
-                        try {
-                            client.send(objectMapper.writeValueAsString(Map.of("type", "message", "message", msg)));
-                            logger.debug("Message broadcasted to room {}", room);
-                        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                            logger.error("Error broadcasting message: {}", e.getMessage(), e);
-                        }
-                    });
-                }
             } else if ("key_exchange".equals(type)) {
                 // Обработка обмена ключами (E2E)
                 logger.debug("Key exchange message from {} in room {}", username, room);
                 String recipient = (String) data.get("recipient");
-                
+
                 // Добавляем отправителя в сообщение
                 data.put("sender", username);
-                
+
                 if (recipient != null && !recipient.isEmpty()) {
                     // Приватный обмен ключами: отправляем только получателю
                     getConnections().forEach(client -> {
@@ -262,10 +241,10 @@ public class ChatWebSocketServer extends WebSocketServer {
                 // Обработка запроса ключа
                 logger.debug("Key request from {} for room {}", username, room);
                 String requester = username;
-                
+
                 // Добавляем запрашивающего в сообщение
                 data.put("requester", requester);
-                
+
                 // Отправляем запрос всем в комнате (кто-то должен ответить)
                 Set<WebSocket> roomSet = rooms.get(room);
                 if (roomSet != null) {
@@ -290,8 +269,8 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        logger.error("WebSocket error for connection {}: {}", 
-                    conn != null ? conn.getRemoteSocketAddress() : "unknown", ex.getMessage(), ex);
+        logger.error("WebSocket error for connection {}: {}",
+                conn != null ? conn.getRemoteSocketAddress() : "unknown", ex.getMessage(), ex);
     }
 
     @Override

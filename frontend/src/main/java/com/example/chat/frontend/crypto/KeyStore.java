@@ -15,15 +15,15 @@ import java.util.Map;
 public class KeyStore {
     // Ключи комнат: Map<roomName, SecretKey>
     private static final Map<String, SecretKey> roomKeys = new ConcurrentHashMap<>();
-    
+
     // Ключи приватных диалогов: Map<username, SecretKey>
     private static final Map<String, SecretKey> pairwiseKeys = new ConcurrentHashMap<>();
-    
+
     // Identity ключи текущего пользователя
     private static PrivateKey myPrivateKey;
     private static PublicKey myPublicKey;
     private static String currentUsername;
-    
+
     /**
      * Сохраняет ключ комнаты.
      */
@@ -33,28 +33,28 @@ public class KeyStore {
         }
         roomKeys.put(room, key);
     }
-    
+
     /**
      * Получает ключ комнаты.
      */
     public static SecretKey getRoomKey(String room) {
         return roomKeys.get(room);
     }
-    
+
     /**
      * Проверяет наличие ключа комнаты.
      */
     public static boolean hasRoomKey(String room) {
         return roomKeys.containsKey(room);
     }
-    
+
     /**
      * Удаляет ключ комнаты.
      */
     public static void removeRoomKey(String room) {
         roomKeys.remove(room);
     }
-    
+
     /**
      * Сохраняет ключ приватного диалога.
      */
@@ -64,28 +64,28 @@ public class KeyStore {
         }
         pairwiseKeys.put(username, key);
     }
-    
+
     /**
      * Получает ключ приватного диалога.
      */
     public static SecretKey getPairwiseKey(String username) {
         return pairwiseKeys.get(username);
     }
-    
+
     /**
      * Проверяет наличие ключа приватного диалога.
      */
     public static boolean hasPairwiseKey(String username) {
         return pairwiseKeys.containsKey(username);
     }
-    
+
     /**
      * Удаляет ключ приватного диалога.
      */
     public static void removePairwiseKey(String username) {
         pairwiseKeys.remove(username);
     }
-    
+
     /**
      * Сохраняет identity ключевую пару текущего пользователя.
      */
@@ -97,35 +97,35 @@ public class KeyStore {
         myPublicKey = keyPair.getPublic();
         currentUsername = username;
     }
-    
+
     /**
      * Получает приватный ключ текущего пользователя.
      */
     public static PrivateKey getMyPrivateKey() {
         return myPrivateKey;
     }
-    
+
     /**
      * Получает публичный ключ текущего пользователя.
      */
     public static PublicKey getMyPublicKey() {
         return myPublicKey;
     }
-    
+
     /**
      * Проверяет, установлены ли identity ключи.
      */
     public static boolean hasIdentityKeys() {
         return myPrivateKey != null && myPublicKey != null;
     }
-    
+
     /**
      * Получает имя текущего пользователя.
      */
     public static String getCurrentUsername() {
         return currentUsername;
     }
-    
+
     /**
      * Очищает все ключи (используется при выходе из системы).
      */
@@ -136,35 +136,81 @@ public class KeyStore {
         myPublicKey = null;
         currentUsername = null;
     }
-    
+
     /**
      * Очищает ключи для конкретной комнаты.
      */
     public static void clearRoomKeys() {
         roomKeys.clear();
     }
-    
+
     /**
      * Очищает ключи приватных диалогов.
      */
     public static void clearPairwiseKeys() {
         pairwiseKeys.clear();
     }
-    
+
     /**
      * Получает количество сохраненных ключей комнат (для отладки).
      */
     public static int getRoomKeysCount() {
         return roomKeys.size();
     }
-    
+
     /**
      * Получает количество сохраненных pairwise ключей (для отладки).
      */
     public static int getPairwiseKeysCount() {
         return pairwiseKeys.size();
     }
-    
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Массовый экспорт/импорт для PersistentKeyStore
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Экспортирует все ключи комнат в Map<roomName, base64>.
+     */
+    public static Map<String, String> exportRoomKeysBase64() {
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        roomKeys.forEach((room, key) ->
+                result.put(room, Base64.getEncoder().encodeToString(key.getEncoded())));
+        return result;
+    }
+
+    /**
+     * Импортирует ключи комнат из Map<roomName, base64>.
+     */
+    public static void importRoomKeysBase64(Map<String, String> map) {
+        map.forEach((room, b64) -> {
+            byte[] keyBytes = Base64.getDecoder().decode(b64);
+            SecretKey key = new javax.crypto.spec.SecretKeySpec(keyBytes, "AES");
+            roomKeys.put(room, key);
+        });
+    }
+
+    /**
+     * Экспортирует все pairwise ключи в Map<username, base64>.
+     */
+    public static Map<String, String> exportPairwiseKeysBase64() {
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        pairwiseKeys.forEach((user, key) ->
+                result.put(user, Base64.getEncoder().encodeToString(key.getEncoded())));
+        return result;
+    }
+
+    /**
+     * Импортирует pairwise ключи из Map<username, base64>.
+     */
+    public static void importPairwiseKeysBase64(Map<String, String> map) {
+        map.forEach((user, b64) -> {
+            byte[] keyBytes = Base64.getDecoder().decode(b64);
+            SecretKey key = new javax.crypto.spec.SecretKeySpec(keyBytes, "AES");
+            pairwiseKeys.put(user, key);
+        });
+    }
+
     /**
      * Экспортирует публичный ключ в Base64 для передачи на сервер.
      */
@@ -174,7 +220,7 @@ public class KeyStore {
         }
         return CryptoService.publicKeyToBase64(myPublicKey);
     }
-    
+
     /**
      * Импортирует identity ключи из Base64 строк (для восстановления из файла).
      * ВНИМАНИЕ: Приватный ключ должен быть зашифрован паролем перед сохранением!
@@ -183,7 +229,7 @@ public class KeyStore {
         if (privateKeyBase64 == null || publicKeyBase64 == null || username == null) {
             throw new IllegalArgumentException("All parameters must be non-null");
         }
-        
+
         try {
             myPrivateKey = CryptoService.privateKeyFromBase64(privateKeyBase64, "EC");
             myPublicKey = CryptoService.publicKeyFromBase64(publicKeyBase64, "EC");
@@ -192,7 +238,7 @@ public class KeyStore {
             throw new RuntimeException("Failed to import identity keys", e);
         }
     }
-    
+
     /**
      * Экспортирует приватный ключ в Base64 (для сохранения в файл).
      * ВНИМАНИЕ: Перед сохранением в файл ключ должен быть зашифрован паролем!

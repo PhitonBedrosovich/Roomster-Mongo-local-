@@ -476,7 +476,7 @@ public class ChatClient extends Application {
             return false;
         }
     }
-    
+
     /**
      * Расшифровывает одно сообщение.
      */
@@ -486,35 +486,51 @@ public class ChatClient extends Application {
         String room = (String) message.get("room");
         String sender = (String) message.get("username");
         String recipient = (String) message.get("recipient");
-        
+
         if (ciphertext == null) {
             return decrypted; // Нет контента для расшифровки
         }
-        
+
         // Проверяем, является ли это зашифрованным сообщением
         if (!EncryptedMessage.isValidTransportFormat(ciphertext)) {
             // Не зашифровано, возвращаем как есть
             return decrypted;
         }
-        
+
         try {
             javax.crypto.SecretKey key;
-            
-            if (recipient != null && recipient.equals(currentUser)) {
-                // Приватное сообщение для нас
-                if (!KeyStore.hasPairwiseKey(sender)) {
-                    // Устанавливаем pairwise ключ
-                    if (keyExchangeHandler != null) {
-                        keyExchangeHandler.establishPairwiseKey(sender);
+            boolean isPrivate = recipient != null && !recipient.isEmpty();
+
+            if (isPrivate) {
+                // Приватное сообщение
+                if (currentUser.equals(recipient)) {
+                    // Я получатель приватного сообщения -> ключ с отправителем
+                    if (!KeyStore.hasPairwiseKey(sender)) {
+                        if (keyExchangeHandler != null) {
+                            keyExchangeHandler.establishPairwiseKey(sender);
+                        }
+                        decrypted.put("content", "[Расшифровка... Ключ устанавливается]");
+                        return decrypted;
                     }
-                    decrypted.put("content", "[Расшифровка... Ключ устанавливается]");
+                    key = KeyStore.getPairwiseKey(sender);
+                } else if (currentUser.equals(sender)) {
+                    // Я отправитель приватного сообщения -> ключ с получателем
+                    if (!KeyStore.hasPairwiseKey(recipient)) {
+                        if (keyExchangeHandler != null) {
+                            keyExchangeHandler.establishPairwiseKey(recipient);
+                        }
+                        decrypted.put("content", "[Расшифровка... Ключ устанавливается]");
+                        return decrypted;
+                    }
+                    key = KeyStore.getPairwiseKey(recipient);
+                } else {
+                    // Мы не участник приватного сообщения
+                    decrypted.put("content", "[Не могу расшифровать: не участник приватного сообщения]");
                     return decrypted;
                 }
-                key = KeyStore.getPairwiseKey(sender);
             } else {
                 // Групповое сообщение
                 if (!KeyStore.hasRoomKey(room)) {
-                    // Запрашиваем ключ комнаты
                     if (keyExchangeHandler != null) {
                         keyExchangeHandler.requestRoomKey(room);
                     }
@@ -523,12 +539,12 @@ public class ChatClient extends Application {
                 }
                 key = KeyStore.getRoomKey(room);
             }
-            
+
             // Расшифровываем
             EncryptedMessage encrypted = EncryptedMessage.fromTransportFormat(ciphertext);
             String plaintext = CryptoService.decryptAESGCM(encrypted, key);
             decrypted.put("content", plaintext);
-            
+
         } catch (SecurityException e) {
             logger.warn("Failed to decrypt message: {}", e.getMessage());
             decrypted.put("content", "[Ошибка расшифровки: сообщение повреждено или ключ неверный]");
@@ -536,7 +552,7 @@ public class ChatClient extends Application {
             logger.error("Error decrypting message", e);
             decrypted.put("content", "[Ошибка расшифровки]");
         }
-        
+
         return decrypted;
     }
     

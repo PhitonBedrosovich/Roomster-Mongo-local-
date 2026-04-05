@@ -10,6 +10,7 @@ import java.security.*;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
+import javax.crypto.Mac;
 
 /**
  * Сервис для криптографических операций:
@@ -39,6 +40,43 @@ public class CryptoService {
         }
     }
     
+    /**
+     * Детерминированное получение pairwise-ключа для приватного диалога A<->B.
+     * Обе стороны вычисляют одинаковый AES-256 ключ: HKDF(HMAC-SHA256(sharedSecret), context),
+     * где context = "PAIRWISE|" + min(userA,userB) + "|" + max(userA,userB)
+     */
+    public static SecretKey derivePairwiseKey(
+            String myUsername,
+            String otherUsername,
+            PrivateKey myPrivateKey,
+            PublicKey otherPublicKey
+    ) {
+        byte[] sharedSecret = computeSharedSecret(myPrivateKey, otherPublicKey);
+        String u1 = myUsername;
+        String u2 = otherUsername;
+        if (u1.compareTo(u2) > 0) {
+            String tmp = u1;
+            u1 = u2;
+            u2 = tmp;
+        }
+        String context = "PAIRWISE|" + u1 + "|" + u2;
+        byte[] salt = context.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(salt, "HmacSHA256"));
+            byte[] prk = mac.doFinal(sharedSecret); // pseudo-random key
+
+            mac.reset();
+            mac.init(new SecretKeySpec(prk, "HmacSHA256"));
+            byte[] okm = mac.doFinal("PAIRWISE_AES_256".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            byte[] keyBytes = Arrays.copyOf(okm, 32);
+            return new SecretKeySpec(keyBytes, AES_ALGORITHM);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new RuntimeException("Failed to derive pairwise key", e);
+        }
+    }
+
     /**
      * Генерирует пару EC ключей для ECDH.
      */

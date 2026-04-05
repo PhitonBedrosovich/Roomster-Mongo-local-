@@ -362,27 +362,32 @@ public class ChatClient extends Application {
             
             try {
                 if (recipient != null && !recipient.isEmpty()) {
-                    // Приватное сообщение: используем pairwise ключ
-                    if (!KeyStore.hasPairwiseKey(recipient)) {
-                        // Устанавливаем pairwise ключ, если его нет
-                        if (keyExchangeHandler != null) {
-                            keyExchangeHandler.establishPairwiseKey(recipient);
-                        }
-                        Platform.runLater(() -> {
-                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                            alert.setTitle("Key Establishment");
-                            alert.setHeaderText("Setting up private encryption key...");
-                            alert.setContentText("Please wait a moment and send again.");
-                            alert.showAndWait();
-                        });
-                        return;
-                    }
-                    
+                    // Приватное сообщение: используем/выводим pairwise ключ детерминированно
                     javax.crypto.SecretKey pairwiseKey = KeyStore.getPairwiseKey(recipient);
                     if (pairwiseKey == null) {
-                        throw new IllegalStateException("Pairwise key not available for user: " + recipient);
+                        try {
+                            java.util.concurrent.CompletableFuture<java.util.Map<String,String>> future =
+                                RoomService.getPublicKeyAsync(recipient, token);
+                            java.util.Map<String,String> data = future.get();
+                            if (data == null || !data.containsKey("publicKey")) {
+                                throw new IllegalStateException("Recipient public key not available");
+                            }
+                            java.security.PublicKey recPub = CryptoService.publicKeyFromBase64(
+                                data.get("publicKey"),
+                                data.getOrDefault("algorithm","EC")
+                            );
+                            pairwiseKey = CryptoService.derivePairwiseKey(
+                                currentUser,
+                                recipient,
+                                KeyStore.getMyPrivateKey(),
+                                recPub
+                            );
+                            KeyStore.savePairwiseKey(recipient, pairwiseKey);
+                        } catch (Exception ex) {
+                            throw new IllegalStateException("Failed to derive pairwise key for recipient: " + recipient, ex);
+                        }
                     }
-                    
+
                     EncryptedMessage encrypted = CryptoService.encryptAESGCM(message, pairwiseKey);
                     ciphertext = encrypted.toTransportFormat();
                 } else {
@@ -476,7 +481,7 @@ public class ChatClient extends Application {
             return false;
         }
     }
-    
+
     /**
      * Расшифровывает одно сообщение.
      */
@@ -486,35 +491,53 @@ public class ChatClient extends Application {
         String room = (String) message.get("room");
         String sender = (String) message.get("username");
         String recipient = (String) message.get("recipient");
-        
+
         if (ciphertext == null) {
             return decrypted; // Нет контента для расшифровки
         }
-        
+
         // Проверяем, является ли это зашифрованным сообщением
         if (!EncryptedMessage.isValidTransportFormat(ciphertext)) {
             // Не зашифровано, возвращаем как есть
             return decrypted;
         }
-        
+
         try {
             javax.crypto.SecretKey key;
-            
-            if (recipient != null && recipient.equals(currentUser)) {
-                // Приватное сообщение для нас
-                if (!KeyStore.hasPairwiseKey(sender)) {
-                    // Устанавливаем pairwise ключ
-                    if (keyExchangeHandler != null) {
-                        keyExchangeHandler.establishPairwiseKey(sender);
+            boolean isPrivate = recipient != null && !recipient.isEmpty();
+
+            if (isPrivate) {
+                // Приватное сообщение: используем/выводим pairwise ключ детерминированно для обеих сторон
+                String other = currentUser.equals(sender) ? recipient : sender;
+                key = KeyStore.getPairwiseKey(other);
+                if (key == null) {
+                    try {
+                        java.util.concurrent.CompletableFuture<java.util.Map<String,String>> future =
+                            RoomService.getPublicKeyAsync(other, token);
+                        java.util.Map<String,String> data = future.get();
+                        if (data == null || !data.containsKey("publicKey")) {
+                            decrypted.put("content", "[Не могу расшифровать: нет публичного ключа собеседника]");
+                            return decrypted;
+                        }
+                        java.security.PublicKey otherPub = CryptoService.publicKeyFromBase64(
+                            data.get("publicKey"),
+                            data.getOrDefault("algorithm","EC")
+                        );
+                        key = CryptoService.derivePairwiseKey(
+                            currentUser,
+                            other,
+                            KeyStore.getMyPrivateKey(),
+                            otherPub
+                        );
+                        KeyStore.savePairwiseKey(other, key);
+                    } catch (Exception ex) {
+                        decrypted.put("content", "[Не могу расшифровать: ошибка получения ключа собеседника]");
+                        return decrypted;
                     }
-                    decrypted.put("content", "[Расшифровка... Ключ устанавливается]");
-                    return decrypted;
                 }
-                key = KeyStore.getPairwiseKey(sender);
             } else {
                 // Групповое сообщение
                 if (!KeyStore.hasRoomKey(room)) {
-                    // Запрашиваем ключ комнаты
                     if (keyExchangeHandler != null) {
                         keyExchangeHandler.requestRoomKey(room);
                     }
@@ -523,12 +546,12 @@ public class ChatClient extends Application {
                 }
                 key = KeyStore.getRoomKey(room);
             }
-            
+
             // Расшифровываем
             EncryptedMessage encrypted = EncryptedMessage.fromTransportFormat(ciphertext);
             String plaintext = CryptoService.decryptAESGCM(encrypted, key);
             decrypted.put("content", plaintext);
-            
+
         } catch (SecurityException e) {
             logger.warn("Failed to decrypt message: {}", e.getMessage());
             decrypted.put("content", "[Ошибка расшифровки: сообщение повреждено или ключ неверный]");
@@ -536,7 +559,7 @@ public class ChatClient extends Application {
             logger.error("Error decrypting message", e);
             decrypted.put("content", "[Ошибка расшифровки]");
         }
-        
+
         return decrypted;
     }
     

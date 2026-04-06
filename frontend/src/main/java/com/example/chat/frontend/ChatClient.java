@@ -464,7 +464,7 @@ public class ChatClient extends Application {
             }
 
             // Создаем WebSocket клиент с кастомными заголовками для передачи токена
-            wsClient = new WebSocketClient(new URI("ws://localhost:8082")) {
+            wsClient = new WebSocketClient(new URI("ws://212.34.128.37:8082")) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
                     Map<String, Object> joinMessage = new HashMap<>();

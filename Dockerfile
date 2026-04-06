@@ -1,5 +1,5 @@
 # Используем официальный образ OpenJDK для Java 21
-FROM openjdk:21-jdk-slim
+FROM eclipse-temurin:21-jdk
 
 # Устанавливаем рабочую директорию
 WORKDIR /app

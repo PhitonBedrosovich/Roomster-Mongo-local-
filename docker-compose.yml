@@ -1,15 +1,14 @@
 services:
   mongo:
-    image: mongo:8.0
+    image: rchard237/mongo:8.0
     container_name: mongo
     restart: always
-    ports:
-      - "27017:27017"
+    command: ["mongod","--auth","--bind_ip_all"]
     volumes:
       - mongo_data:/data/db
 
   redis:
-    image: redis:7.2
+    image: rchard237/redis:7.2
     container_name: redis
     restart: always
     ports:
@@ -23,9 +22,7 @@ services:
       retries: 5
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: rchard237/roomster-app
     container_name: roomster-app
     depends_on:
       redis:
@@ -36,10 +33,10 @@ services:
       - "8081:8081"
       - "8082:8082"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/chatdb
-      - SPRING_DATA_REDIS_HOST=redis
-      - SPRING_DATA_REDIS_PORT=6379
+      - "SPRING_DATA_MONGODB_URI=mongodb://appuser:privet345@mongo:27017/chatdb?authSource=chatdb"
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
 
 volumes:
   mongo_data:
-  redis_data: 
+  redis_data:

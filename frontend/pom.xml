@@ -8,13 +8,12 @@
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
-    <javafx.version>21.0.2</javafx.version>
+    <javafx.version>21.0.8</javafx.version>
     <jackson.version>2.15.2</jackson.version>
     <javawebsocket.version>1.5.3</javawebsocket.version>
   </properties>
 
   <dependencies>
-    <!-- JavaFX -->
     <dependency>
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-controls</artifactId>
@@ -25,22 +24,16 @@
       <artifactId>javafx-fxml</artifactId>
       <version>${javafx.version}</version>
     </dependency>
-
-    <!-- Jackson (для работы с JSON) -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>${jackson.version}</version>
     </dependency>
-
-    <!-- Java-WebSocket (WebSocket клиент) -->
     <dependency>
       <groupId>org.java-websocket</groupId>
       <artifactId>Java-WebSocket</artifactId>
       <version>${javawebsocket.version}</version>
     </dependency>
-
-    <!-- Bouncy Castle для криптографии -->
     <dependency>
       <groupId>org.bouncycastle</groupId>
       <artifactId>bcprov-jdk18on</artifactId>
@@ -51,8 +44,6 @@
       <artifactId>bcpkix-jdk18on</artifactId>
       <version>1.78</version>
     </dependency>
-
-    <!-- SLF4J для логирования -->
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
@@ -67,7 +58,6 @@
 
   <build>
     <plugins>
-      <!-- Плагин для JavaFX, если нужно запускать через mvn javafx:run -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
@@ -76,7 +66,7 @@
           <mainClass>com.example.chat.frontend.ChatClient</mainClass>
         </configuration>
       </plugin>
-      <!-- Плагин для создания jar с Main-Class -->
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
@@ -85,31 +75,31 @@
           <archive>
             <manifest>
               <mainClass>com.example.chat.frontend.ChatClient</mainClass>
+              <addClasspath>true</addClasspath>
+              <classpathPrefix>libs/</classpathPrefix>
             </manifest>
           </archive>
         </configuration>
       </plugin>
-      <!-- Плагин для создания fat jar (uber-jar) с зависимостями -->
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>3.5.0</version>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.6.0</version>
         <executions>
           <execution>
+            <id>copy-dependencies</id>
             <phase>package</phase>
             <goals>
-              <goal>shade</goal>
+              <goal>copy-dependencies</goal>
             </goals>
             <configuration>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.example.chat.frontend.ChatClient</mainClass>
-                </transformer>
-              </transformers>
+              <outputDirectory>${project.build.directory}/libs</outputDirectory>
+              <excludeGroupIds>org.openjfx</excludeGroupIds>
             </configuration>
           </execution>
         </executions>
       </plugin>
     </plugins>
   </build>
-</project> 
+</project>

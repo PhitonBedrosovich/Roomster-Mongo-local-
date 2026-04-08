@@ -55,6 +55,8 @@ public class ChatClient extends Application {
     private KeyExchangeHandler keyExchangeHandler;
     // Пароль keystore хранится в памяти на время сессии для автосохранения
     private char[] keystorePassword;
+    // Ссылка на главное окно — нужна чтобы диалоги открывались поверх него
+    private Stage primaryStage;
 
     // Вспомогательные классы для десериализации
     private static class HistoryPayload {
@@ -72,6 +74,7 @@ public class ChatClient extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        this.primaryStage = primaryStage;
         navigationController = new NavigationController();
         rootPane = new BorderPane();
         navigationBar = new NavigationBar(navigationController, this::goHome, this::onRoomSelected);
@@ -166,54 +169,67 @@ public class ChatClient extends Application {
      * После успеха вызывает onDone.
      */
     private void showKeystorePasswordDialog(String username, Runnable onDone) {
-        boolean exists = PersistentKeyStore.keystoreExists(username);
+        Platform.runLater(() -> {
 
-        Dialog<char[]> dialog = new Dialog<>();
-        dialog.setTitle("Key Storage");
-        dialog.setHeaderText(exists
-                ? "🔑 Enter your keystore password to decrypt saved keys"
-                : "🔑 Create a keystore password to protect your keys");
+            boolean exists = PersistentKeyStore.keystoreExists(username);
 
-        ButtonType okButton     = new ButtonType("OK", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
-        ButtonType skipButton   = new ButtonType("Skip (keys won't persist)", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().addAll(okButton, skipButton);
+            while (true) {
+                Dialog<char[]> dialog = new Dialog<>();
+                dialog.initOwner(primaryStage);
 
-        PasswordField pwField = new PasswordField();
-        pwField.setPromptText("Keystore password");
-        pwField.setPrefWidth(280);
+                dialog.setTitle("Key Storage");
+                dialog.setHeaderText(exists
+                        ? "🔑 Enter your keystore password"
+                        : "🔑 Create a keystore password");
 
-        Label infoLabel = new Label(exists
-                ? "Your encryption keys from previous sessions will be restored."
-                : "This password protects your encryption keys on disk.\nYou'll need it every time you start the app.");
-        infoLabel.setWrapText(true);
+                ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
+                ButtonType skipButton = new ButtonType("Skip", ButtonBar.ButtonData.CANCEL_CLOSE);
+                dialog.getDialogPane().getButtonTypes().setAll(okButton, skipButton);
 
-        Label errorLabel = new Label();
-        errorLabel.setStyle("-fx-text-fill: #e53935;");
-        errorLabel.setVisible(false);
+                PasswordField pwField = new PasswordField();
+                pwField.setPromptText("Password");
 
-        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10, infoLabel, pwField, errorLabel);
-        content.setPadding(new Insets(10));
-        dialog.getDialogPane().setContent(content);
+                Label errorLabel = new Label();
+                errorLabel.setStyle("-fx-text-fill: red;");
 
-        // Фокус на поле пароля
-        dialog.getDialogPane().lookupButton(okButton).setDisable(true);
-        pwField.textProperty().addListener((obs, o, n) ->
-                dialog.getDialogPane().lookupButton(okButton).setDisable(n.trim().isEmpty()));
+                VBox box = new VBox(10, pwField, errorLabel);
+                box.setPadding(new Insets(10));
+                dialog.getDialogPane().setContent(box);
 
-        // Enter подтверждает
-        pwField.setOnAction(e -> {
-            if (!pwField.getText().trim().isEmpty()) {
-                ((Button) dialog.getDialogPane().lookupButton(okButton)).fire();
+                dialog.setResultConverter(btn -> btn == okButton ? pwField.getText().toCharArray() : null);
+
+                Optional<char[]> result = dialog.showAndWait();
+
+                if (result.isEmpty()) {
+                    logger.info("User skipped keystore");
+                    onDone.run();
+                    return;
+                }
+
+                char[] password = result.get();
+
+                try {
+                    if (exists) {
+                        PersistentKeyStore.load(username, password);
+                        logger.info("Keystore loaded");
+                    } else {
+                        PersistentKeyStore.save(username, password);
+                        logger.info("Keystore created");
+                    }
+
+                    keystorePassword = password;
+                    onDone.run();
+                    return;
+
+                } catch (SecurityException e) {
+                    errorLabel.setText("Wrong password!");
+                } catch (Exception e) {
+                    errorLabel.setText("Error: " + e.getMessage());
+                }
+
+                Arrays.fill(password, '\0');
             }
         });
-
-        dialog.setResultConverter(btn -> {
-            if (btn == okButton) return pwField.getText().toCharArray();
-            return null; // Skip
-        });
-
-        // Показываем диалог в цикле пока не введут правильный пароль (или Skip)
-        showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
     }
 
     private void showKeystoreDialogLoop(Dialog<char[]> dialog, ButtonType okButton,
@@ -409,6 +425,7 @@ public class ChatClient extends Application {
      */
     private void showSaveKeystoreDialog(String username) {
         Dialog<char[]> dialog = new Dialog<>();
+        dialog.initOwner(primaryStage);
         dialog.setTitle("Save Keys");
         dialog.setHeaderText("💾 Save your encryption keys before logging out?");
 

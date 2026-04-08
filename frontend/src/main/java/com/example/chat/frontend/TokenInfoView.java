@@ -79,13 +79,13 @@ public class TokenInfoView {
             // Показываем индикатор загрузки
             statusLabel.setText("🔄 Validating token...");
             statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
-            
+
             HttpClient client = HttpClient.newHttpClient();
             ObjectMapper mapper = new ObjectMapper();
             String body = mapper.writeValueAsString(Map.of("token", currentToken));
-            
+
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("http://localhost:8081/api/auth/validate"))
+                    .uri(URI.create("http://212.34.128.37:8081/api/auth/validate"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
@@ -94,25 +94,25 @@ public class TokenInfoView {
 
             if (response.statusCode() == 200) {
                 Map<String, Object> responseBody = mapper.readValue(
-                    response.body(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+                        response.body(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
                 );
-                
+
                 String username = (String) responseBody.get("username");
                 String expiresAt = (String) responseBody.get("expiresAt");
-                
+
                 tokenInfoLabel.setText(String.format(
-                    "👤 Username: %s\n" +
-                    "🔑 Token: %s\n" +
-                    "⏰ Expires at: %s\n" +
-                    "✅ Status: Valid",
-                    username,
-                    currentToken.substring(0, Math.min(50, currentToken.length())) + "...",
-                    expiresAt
+                        "👤 Username: %s\n" +
+                                "🔑 Token: %s\n" +
+                                "⏰ Expires at: %s\n" +
+                                "✅ Status: Valid",
+                        username,
+                        currentToken.substring(0, Math.min(50, currentToken.length())) + "...",
+                        expiresAt
                 ));
-                
+
                 statusLabel.setText("✅ Token is valid");
                 statusLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
-                
+
             } else {
                 tokenInfoLabel.setText("❌ Token validation failed\nResponse: " + response.body());
                 statusLabel.setText("❌ Token is invalid or expired");
@@ -128,4 +128,4 @@ public class TokenInfoView {
     public Node getNode() {
         return root;
     }
-} 
+}

@@ -67,7 +67,8 @@
 /* Стили для текстовых полей */
 .text-field, .password-field {
     -fx-background-color: white;
-    -fx-border-color: #ced4da;
+    -fx-border-color: #007bff;
+    -fx-border-width: 1.5px;
     -fx-border-radius: 4px;
     -fx-background-radius: 4px;
     -fx-padding: 8px 12px;
@@ -75,8 +76,8 @@
 }
 
 .text-field:focused, .password-field:focused {
-    -fx-border-color: #007bff;
-    -fx-effect: dropshadow(gaussian, rgba(0,123,255,0.25), 4, 0, 0, 0);
+    -fx-border-color: #0056b3;
+    -fx-effect: dropshadow(gaussian, rgba(0,123,255,0.30), 4, 0, 0, 0);
 }
 
 /* Стили для списков */

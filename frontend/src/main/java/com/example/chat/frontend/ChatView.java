@@ -344,16 +344,38 @@ public class ChatView {
             boolean isDark = getScene() != null
                     && getScene().getRoot().getStyleClass().contains("dark-theme");
 
-            // ── Разделитель даты ──────────────────────────────────────────
+            // ── Разделитель даты — красивый бейдж по центру ─────────────
             if (item.getUsername() == null) {
-                Label lbl = new Label("───  " + item.getTimestamp() + "  ───");
-                lbl.setMaxWidth(Double.MAX_VALUE);
-                lbl.setAlignment(Pos.CENTER);
-                lbl.setFont(Font.font("Segoe UI", 11));
-                lbl.setStyle("-fx-text-fill: " + (isDark ? "#6c757d" : "#adb5bd") + ";");
+                Label dateLbl = new Label("  " + item.getTimestamp() + "  ");
+                dateLbl.setFont(Font.font("Segoe UI", FontWeight.BOLD, 11));
+                String badgeBg   = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
+                String badgeFg   = isDark ? "#adb5bd" : "#6c757d";
+                String badgeBdr  = isDark ? "#495057" : "#dee2e6";
+                dateLbl.setStyle(
+                        "-fx-text-fill: " + badgeFg + ";" +
+                                "-fx-background-color: " + badgeBg + ";" +
+                                "-fx-background-radius: 10px;" +
+                                "-fx-border-color: " + badgeBdr + ";" +
+                                "-fx-border-radius: 10px;" +
+                                "-fx-border-width: 1px;" +
+                                "-fx-padding: 2px 12px;"
+                );
+                // Линии по бокам от бейджа
+                Region lineL = new Region();
+                Region lineR = new Region();
+                String lineStyle = "-fx-background-color: " + badgeBdr + "; -fx-pref-height: 1px; -fx-max-height: 1px;";
+                lineL.setStyle(lineStyle); lineR.setStyle(lineStyle);
+                HBox.setHgrow(lineL, Priority.ALWAYS);
+                HBox.setHgrow(lineR, Priority.ALWAYS);
+
+                HBox badge = new HBox(8, lineL, dateLbl, lineR);
+                badge.setAlignment(Pos.CENTER);
+                badge.setMaxWidth(Double.MAX_VALUE);
+                badge.setPadding(new Insets(6, 16, 6, 16));
+
                 getStyleClass().clear();
                 setStyle("-fx-background-color: transparent;");
-                setGraphic(lbl); setText(null); return;
+                setGraphic(badge); setText(null); return;
             }
 
             // ── Обычное сообщение ─────────────────────────────────────────

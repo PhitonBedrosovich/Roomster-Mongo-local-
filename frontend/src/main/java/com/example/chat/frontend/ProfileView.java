@@ -9,6 +9,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
+import javafx.scene.control.Separator;
 import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -179,58 +180,115 @@ public class ProfileView {
     }
 
     private void showChangePasswordDialog() {
-        Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle("Смена пароля");
-        dialog.setHeaderText("Введите новый пароль");
+        // Создаём Stage вместо Dialog — как окно keystore, тема подхватывается
+        javafx.stage.Stage stage = new javafx.stage.Stage();
+        stage.setTitle("Смена пароля");
+        stage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+        stage.setResizable(false);
 
-        ButtonType changeButtonType = new ButtonType("Изменить", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(changeButtonType, ButtonType.CANCEL);
+        // Заголовок
+        Label titleLabel = new Label("🔑 Смена пароля");
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
+        // Поля
+        Label oldLabel = new Label("Текущий пароль:");
         PasswordToggleField oldPasswordField = new PasswordToggleField("Текущий пароль");
+        oldPasswordField.setPrefWidth(280);
+
+        Label newLabel = new Label("Новый пароль:");
         PasswordToggleField newPasswordField = new PasswordToggleField("Новый пароль");
+        newPasswordField.setPrefWidth(280);
+
+        Label confirmLabel = new Label("Подтвердите пароль:");
         PasswordToggleField confirmPasswordField = new PasswordToggleField("Подтвердите новый пароль");
+        confirmPasswordField.setPrefWidth(280);
 
-        VBox content = new VBox(10);
-        content.getChildren().addAll(
-                new Label("Текущий пароль:"), oldPasswordField,
-                new Label("Новый пароль:"), newPasswordField,
-                new Label("Подтвердите пароль:"), confirmPasswordField
+        // Метка ошибки
+        Label errorLabel = new Label();
+        errorLabel.setStyle("-fx-text-fill: #e53935; -fx-font-size: 12px;");
+        errorLabel.setVisible(false);
+        errorLabel.setManaged(false);
+        errorLabel.setWrapText(true);
+        errorLabel.setMaxWidth(280);
+
+        // Кнопки
+        Button changeBtn = new Button("Изменить");
+        changeBtn.getStyleClass().addAll("button", "success");
+        changeBtn.setPrefWidth(120);
+        Button cancelBtn = new Button("Отмена");
+        cancelBtn.getStyleClass().addAll("button", "secondary");
+        cancelBtn.setPrefWidth(100);
+
+        HBox btnBox = new HBox(12, changeBtn, cancelBtn);
+        btnBox.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox content = new VBox(10,
+                titleLabel,
+                new javafx.scene.control.Separator(),
+                oldLabel, oldPasswordField,
+                newLabel, newPasswordField,
+                confirmLabel, confirmPasswordField,
+                errorLabel,
+                btnBox
         );
-        dialog.getDialogPane().setContent(content);
+        content.setPadding(new Insets(20));
+        content.setPrefWidth(320);
 
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == changeButtonType) {
-                if (!newPasswordField.getText().equals(confirmPasswordField.getText())) {
-                    showAlert(Alert.AlertType.ERROR, "Ошибка", "Пароли не совпадают", "Убедитесь, что новые пароли совпадают.");
-                    return null;
-                }
-                if (oldPasswordField.getText().isEmpty() || newPasswordField.getText().isEmpty()) {
-                    showAlert(Alert.AlertType.ERROR, "Ошибка", "Заполните все поля", "Пожалуйста, заполните все поля.");
-                    return null;
-                }
-                com.example.chat.frontend.service.AuthService.changePassword(
-                        username,
-                        oldPasswordField.getText(),
-                        newPasswordField.getText(),
-                        () -> showAlert(Alert.AlertType.INFORMATION, "Успех", "Пароль изменён", "Ваш пароль успешно изменён."),
-                        error -> {
-                            String msg = error;
-                            if (msg != null) {
-                                if (msg.contains(":")) msg = msg.substring(msg.indexOf(":") + 1).trim();
-                                if (msg.contains("Current password is incorrect")) msg = "Неверный текущий пароль.";
-                                else if (msg.contains("User not found")) msg = "Пользователь не найден.";
-                                else if (msg.toLowerCase().contains("connect") || msg.toLowerCase().contains("server")) msg = "Ошибка сервера. Попробуйте позже.";
-                                else if (msg.length() > 100) msg = "Не удалось изменить пароль. Попробуйте снова.";
-                            }
-                            showAlert(Alert.AlertType.ERROR, "Ошибка", "Не удалось изменить пароль", msg);
-                        }
-                );
-                return "processing";
+        javafx.scene.Scene scene = new javafx.scene.Scene(content);
+        // Подключаем тот же CSS что и у главного окна
+        if (root.getScene() != null) {
+            scene.getStylesheets().addAll(root.getScene().getStylesheets());
+            // Копируем тему (dark/light)
+            String themeClass = root.getScene().getRoot().getStyleClass()
+                    .stream().filter(c -> c.endsWith("-theme")).findFirst().orElse("light-theme");
+            scene.getRoot().getStyleClass().add(themeClass);
+        }
+        stage.setScene(scene);
+
+        cancelBtn.setOnAction(e -> stage.close());
+
+        changeBtn.setOnAction(e -> {
+            errorLabel.setVisible(false);
+            errorLabel.setManaged(false);
+
+            if (oldPasswordField.isEmpty() || newPasswordField.isEmpty() || confirmPasswordField.isEmpty()) {
+                errorLabel.setText("Пожалуйста, заполните все поля.");
+                errorLabel.setVisible(true); errorLabel.setManaged(true); return;
             }
-            return null;
+            if (!newPasswordField.getText().equals(confirmPasswordField.getText())) {
+                errorLabel.setText("Новые пароли не совпадают.");
+                errorLabel.setVisible(true); errorLabel.setManaged(true); return;
+            }
+
+            changeBtn.setDisable(true);
+            changeBtn.setText("Сохранение...");
+
+            com.example.chat.frontend.service.AuthService.changePassword(
+                    username,
+                    oldPasswordField.getText(),
+                    newPasswordField.getText(),
+                    () -> javafx.application.Platform.runLater(() -> {
+                        stage.close();
+                        showAlert(Alert.AlertType.INFORMATION, "Успех", "Пароль изменён", "Ваш пароль успешно изменён.");
+                    }),
+                    error -> javafx.application.Platform.runLater(() -> {
+                        changeBtn.setDisable(false);
+                        changeBtn.setText("Изменить");
+                        String msg = error;
+                        if (msg != null) {
+                            if (msg.contains(":")) msg = msg.substring(msg.indexOf(":") + 1).trim();
+                            if (msg.contains("Current password is incorrect")) msg = "Неверный текущий пароль.";
+                            else if (msg.contains("User not found")) msg = "Пользователь не найден.";
+                            else if (msg.toLowerCase().contains("connect") || msg.toLowerCase().contains("server")) msg = "Ошибка сервера. Попробуйте позже.";
+                            else if (msg.length() > 100) msg = "Не удалось изменить пароль. Попробуйте снова.";
+                        }
+                        errorLabel.setText(msg);
+                        errorLabel.setVisible(true); errorLabel.setManaged(true);
+                    })
+            );
         });
 
-        dialog.showAndWait();
+        stage.showAndWait();
     }
 
     private void showAlert(Alert.AlertType type, String title, String header, String content) {

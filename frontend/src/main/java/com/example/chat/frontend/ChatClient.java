@@ -25,6 +25,7 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.PasswordField;
+import com.example.chat.frontend.PasswordToggleField;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -179,15 +180,14 @@ public class ChatClient extends Application {
 
                 dialog.setTitle("Key Storage");
                 dialog.setHeaderText(exists
-                        ? "🔑 Enter your keystore password"
-                        : "🔑 Create a keystore password");
+                        ? "🔑 Введите пароль хранилища ключей"
+                        : "🔑 Создайте пароль хранилища ключей");
 
-                ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
-                ButtonType skipButton = new ButtonType("Skip", ButtonBar.ButtonData.CANCEL_CLOSE);
+                ButtonType okButton = new ButtonType("Применить", ButtonBar.ButtonData.OK_DONE);
+                ButtonType skipButton = new ButtonType("Пропустить", ButtonBar.ButtonData.CANCEL_CLOSE);
                 dialog.getDialogPane().getButtonTypes().setAll(okButton, skipButton);
 
-                PasswordField pwField = new PasswordField();
-                pwField.setPromptText("Password");
+                PasswordToggleField pwField = new PasswordToggleField("Пароль");
 
                 Label errorLabel = new Label();
                 errorLabel.setStyle("-fx-text-fill: red;");
@@ -196,7 +196,7 @@ public class ChatClient extends Application {
                 box.setPadding(new Insets(10));
                 dialog.getDialogPane().setContent(box);
 
-                dialog.setResultConverter(btn -> btn == okButton ? pwField.getText().toCharArray() : null);
+                dialog.setResultConverter(btn -> btn == okButton ? pwField.toCharArray() : null);
 
                 Optional<char[]> result = dialog.showAndWait();
 
@@ -222,9 +222,9 @@ public class ChatClient extends Application {
                     return;
 
                 } catch (SecurityException e) {
-                    errorLabel.setText("Wrong password!");
+                    errorLabel.setText("Неправильный пароль!");
                 } catch (Exception e) {
-                    errorLabel.setText("Error: " + e.getMessage());
+                    errorLabel.setText("Ошибка: " + e.getMessage());
                 }
 
                 Arrays.fill(password, '\0');
@@ -233,7 +233,7 @@ public class ChatClient extends Application {
     }
 
     private void showKeystoreDialogLoop(Dialog<char[]> dialog, ButtonType okButton,
-                                        Label errorLabel, PasswordField pwField,
+                                        Label errorLabel, PasswordToggleField pwField,
                                         String username, boolean exists, Runnable onDone) {
         dialog.showAndWait().ifPresentOrElse(password -> {
             if (password == null) {
@@ -253,14 +253,14 @@ public class ChatClient extends Application {
                 } catch (SecurityException e) {
                     // Неверный пароль — показываем снова
                     Arrays.fill(password, '\0');
-                    errorLabel.setText("Wrong password, try again.");
+                    errorLabel.setText("Неверный пароль, попробуйте еще раз");
                     errorLabel.setVisible(true);
                     pwField.clear();
                     showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
                 } catch (Exception e) {
                     logger.error("Failed to load keystore", e);
                     Arrays.fill(password, '\0');
-                    errorLabel.setText("Failed to load keystore: " + e.getMessage());
+                    errorLabel.setText("Не удалось загрузить хранилище ключей: " + e.getMessage());
                     errorLabel.setVisible(true);
                     pwField.clear();
                     showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
@@ -275,7 +275,7 @@ public class ChatClient extends Application {
                 } catch (Exception e) {
                     logger.error("Failed to create keystore", e);
                     Arrays.fill(password, '\0');
-                    errorLabel.setText("Failed to create keystore: " + e.getMessage());
+                    errorLabel.setText("Не удалось создать хранилище ключей: " + e.getMessage());
                     errorLabel.setVisible(true);
                     pwField.clear();
                     showKeystoreDialogLoop(dialog, okButton, errorLabel, pwField, username, exists, onDone);
@@ -426,15 +426,14 @@ public class ChatClient extends Application {
     private void showSaveKeystoreDialog(String username) {
         Dialog<char[]> dialog = new Dialog<>();
         dialog.initOwner(primaryStage);
-        dialog.setTitle("Save Keys");
-        dialog.setHeaderText("💾 Save your encryption keys before logging out?");
+        dialog.setTitle("Сохранить ключи");
+        dialog.setHeaderText("💾 Сохранить ключи шифрования перед выходом?");
 
-        ButtonType saveBtn = new ButtonType("Save", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
-        ButtonType skipBtn = new ButtonType("Skip", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType saveBtn = new ButtonType("Сохранить", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        ButtonType skipBtn = new ButtonType("Пропустить", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(saveBtn, skipBtn);
 
-        PasswordField pwField = new PasswordField();
-        pwField.setPromptText("Keystore password");
+        PasswordToggleField pwField = new PasswordToggleField("Пароль хранилища");
         pwField.setPrefWidth(280);
 
         Label errorLabel = new Label();
@@ -442,16 +441,16 @@ public class ChatClient extends Application {
         errorLabel.setVisible(false);
 
         javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(10,
-                new Label("Enter your keystore password to save updated keys (room & pairwise)."),
+                new Label("Введите пароль хранилища ключей, чтобы сохранить обновленные ключи (для комнаты и парные)"),
                 pwField, errorLabel);
         content.setPadding(new Insets(10));
         dialog.getDialogPane().setContent(content);
 
         dialog.getDialogPane().lookupButton(saveBtn).setDisable(true);
         pwField.textProperty().addListener((obs, o, n) ->
-                dialog.getDialogPane().lookupButton(saveBtn).setDisable(n.trim().isEmpty()));
+                dialog.getDialogPane().lookupButton(saveBtn).setDisable(n == null || n.trim().isEmpty()));
 
-        dialog.setResultConverter(btn -> btn == saveBtn ? pwField.getText().toCharArray() : null);
+        dialog.setResultConverter(btn -> btn == saveBtn ? pwField.toCharArray() : null);
 
         dialog.showAndWait().ifPresent(password -> {
             if (password == null) return;
@@ -569,9 +568,9 @@ public class ChatClient extends Application {
                         Platform.runLater(() -> {
                             // Показываем сообщение об ошибке аутентификации
                             Alert alert = new Alert(Alert.AlertType.ERROR);
-                            alert.setTitle("Authentication Error");
-                            alert.setHeaderText("Connection Failed");
-                            alert.setContentText("Your session has expired. Please log in again.");
+                            alert.setTitle("Ошибка аутентификации");
+                            alert.setHeaderText("Соединение не удалось");
+                            alert.setContentText("Срок действия вашей сессии истек. Пожалуйста, войдите в систему снова");
                             alert.showAndWait();
                             goHome(); // Возвращаемся на экран входа
                         });
@@ -622,9 +621,9 @@ public class ChatClient extends Application {
                         }
                         Platform.runLater(() -> {
                             Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                            alert.setTitle("Key Establishment");
-                            alert.setHeaderText("Setting up private encryption key...");
-                            alert.setContentText("Please wait a moment and send again.");
+                            alert.setTitle("Ключевое учреждение");
+                            alert.setHeaderText("Настройка закрытого ключа шифрования...");
+                            alert.setContentText("Пожалуйста, подождите немного и отправьте снова.");
                             alert.showAndWait();
                         });
                         return;
@@ -632,7 +631,7 @@ public class ChatClient extends Application {
 
                     javax.crypto.SecretKey pairwiseKey = KeyStore.getPairwiseKey(recipient);
                     if (pairwiseKey == null) {
-                        throw new IllegalStateException("Pairwise key not available for user: " + recipient);
+                        throw new IllegalStateException("Парный ключ недоступен для пользователя: " + recipient);
                     }
 
                     EncryptedMessage encrypted = CryptoService.encryptAESGCM(message, pairwiseKey);
@@ -647,9 +646,9 @@ public class ChatClient extends Application {
                         // Показываем сообщение пользователю
                         Platform.runLater(() -> {
                             Alert alert = new Alert(Alert.AlertType.WARNING);
-                            alert.setTitle("Key Not Available");
-                            alert.setHeaderText("Room Key Missing");
-                            alert.setContentText("Requesting room key... Please wait and try again.");
+                            alert.setTitle("Ключ недоступен");
+                            alert.setHeaderText("Ключ от комнаты отсутствует");
+                            alert.setContentText("Запрос ключа от комнаты... Пожалуйста, подождите и попробуйте снова");
                             alert.showAndWait();
                         });
                         return;
@@ -663,9 +662,9 @@ public class ChatClient extends Application {
                 logger.error("Error encrypting message", e);
                 Platform.runLater(() -> {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle("Encryption Error");
-                    alert.setHeaderText("Failed to Encrypt Message");
-                    alert.setContentText("Error: " + e.getMessage());
+                    alert.setTitle("Ошибка шифрования");
+                    alert.setHeaderText("Не удалось зашифровать сообщение");
+                    alert.setContentText("Ошибка: " + e.getMessage());
                     alert.showAndWait();
                 });
                 return;
@@ -699,13 +698,13 @@ public class ChatClient extends Application {
         // - если мы уже в FX-потоке: показываем showAndWait() напрямую
         // - иначе: показываем через Platform.runLater() и ждем через CompletableFuture
 
-        ButtonType continueButton = new ButtonType("Continue Anyway");
-        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType continueButton = new ButtonType("Продолжить в любом случае");
+        ButtonType cancelButton = new ButtonType("Отмена", ButtonBar.ButtonData.CANCEL_CLOSE);
 
         if (Platform.isFxApplicationThread()) {
             Alert alert = new Alert(Alert.AlertType.WARNING);
-            alert.setTitle("Sensitive Data Detected");
-            alert.setHeaderText("⚠️ Warning: Sensitive Information Found");
+            alert.setTitle("Обнаружены конфиденциальные данные");
+            alert.setHeaderText("⚠️ Внимание: Обнаружена конфиденциальная информация");
             alert.setContentText(scanResult.getWarningMessage());
             alert.getButtonTypes().setAll(continueButton, cancelButton);
             return alert.showAndWait().map(bt -> bt == continueButton).orElse(false);
@@ -714,8 +713,8 @@ public class ChatClient extends Application {
         java.util.concurrent.CompletableFuture<Boolean> future = new java.util.concurrent.CompletableFuture<>();
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.WARNING);
-            alert.setTitle("Sensitive Data Detected");
-            alert.setHeaderText("⚠️ Warning: Sensitive Information Found");
+            alert.setTitle("Обнаружены конфиденциальные данные");
+            alert.setHeaderText("⚠️ Внимание: Обнаружена конфиденциальная информация.");
             alert.setContentText(scanResult.getWarningMessage());
             alert.getButtonTypes().setAll(continueButton, cancelButton);
             boolean result = alert.showAndWait().map(bt -> bt == continueButton).orElse(false);

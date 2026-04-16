@@ -6,6 +6,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import com.example.chat.frontend.PasswordToggleField;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
 import javafx.scene.text.Font;
@@ -34,7 +35,7 @@ public class LoginView {
 
         // Заголовок
 
-        Label welcomeLabel = new Label("Welcome to Roomster");
+        Label welcomeLabel = new Label("Добро пожаловать в Roomster");
         welcomeLabel.getStyleClass().add("app-title");
         welcomeLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 32));
 
@@ -44,23 +45,22 @@ public class LoginView {
         inputContainer.setMaxWidth(300);
 
         TextField usernameField = new TextField();
-        usernameField.setPromptText("Username");
+        usernameField.setPromptText("Имя пользователя");
         usernameField.setPrefHeight(45);
 
-        PasswordField passwordField = new PasswordField();
-        passwordField.setPromptText("Password");
-        passwordField.setPrefHeight(45);
+        PasswordToggleField passwordField = new PasswordToggleField("Пароль");
+        passwordField.setFieldHeight(45);
 
         // Кнопки
         HBox buttonContainer = new HBox(15);
         buttonContainer.setAlignment(Pos.CENTER);
 
-        loginButton = new Button("Sign In");
+        loginButton = new Button("Войти");
         loginButton.getStyleClass().addAll("primary", "success");
         loginButton.setPrefWidth(120);
         loginButton.setPrefHeight(40);
 
-        registerButton = new Button("Sign Up");
+        registerButton = new Button("Зарегистрироваться");
         registerButton.getStyleClass().addAll("secondary");
         registerButton.setPrefWidth(120);
         registerButton.setPrefHeight(40);
@@ -80,6 +80,7 @@ public class LoginView {
         // Обработка Enter в полях
         usernameField.setOnAction(e -> handleLogin(usernameField.getText(), passwordField.getText()));
         passwordField.setOnAction(e -> handleLogin(usernameField.getText(), passwordField.getText()));
+        // PasswordToggleField делегирует setOnAction обоим внутренним полям
 
         // Метка ошибки
         errorLabel = new Label();
@@ -97,59 +98,59 @@ public class LoginView {
 
     private void handleLogin(String username, String password) {
         if (username.isEmpty() || password.isEmpty()) {
-            showError("Please enter both username and password");
+            showError("Пожалуйста, введите имя пользователя и пароль");
             return;
         }
 
         setLoading(true);
-        AuthService.login(username, password, 
-            token -> {
-                setLoading(false);
-                hideError();
-                NotificationService.showNotification("Success", "Welcome back!", NotificationService.NotificationType.SUCCESS);
-                onLoginSuccess.accept(token);
-            },
-            error -> {
-                setLoading(false);
-                String userMessage = error;
-                if (error != null) {
-                    // Убираем техническую часть, если есть
-                    if (userMessage.contains(":")) {
-                        userMessage = userMessage.substring(userMessage.indexOf(":") + 1).trim();
+        AuthService.login(username, password,
+                token -> {
+                    setLoading(false);
+                    hideError();
+                    NotificationService.showNotification("Успешный вход", "С возвращением!", NotificationService.NotificationType.SUCCESS);
+                    onLoginSuccess.accept(token);
+                },
+                error -> {
+                    setLoading(false);
+                    String userMessage = error;
+                    if (error != null) {
+                        // Убираем техническую часть, если есть
+                        if (userMessage.contains(":")) {
+                            userMessage = userMessage.substring(userMessage.indexOf(":") + 1).trim();
+                        }
+                        if (userMessage.toLowerCase().contains("invalid credentials")) {
+                            userMessage = "Неверное имя пользователя или пароль.";
+                        } else if (userMessage.toLowerCase().contains("user not found")) {
+                            userMessage = "Пользователь не найден.";
+                        } else if (userMessage.toLowerCase().contains("connect") || userMessage.toLowerCase().contains("server")) {
+                            userMessage = "Ошибка сервера. Попробуйте позже.";
+                        } else if (userMessage.length() > 100) {
+                            userMessage = "Ошибка входа. Попробуйте снова.";
+                        }
                     }
-                    if (userMessage.toLowerCase().contains("invalid credentials")) {
-                        userMessage = "Invalid username or password.";
-                    } else if (userMessage.toLowerCase().contains("user not found")) {
-                        userMessage = "User not found.";
-                    } else if (userMessage.toLowerCase().contains("connect") || userMessage.toLowerCase().contains("server")) {
-                        userMessage = "Server error. Please try again later.";
-                    } else if (userMessage.length() > 100) {
-                        userMessage = "Login failed. Please try again.";
-                    }
+                    showError(userMessage);
                 }
-                showError(userMessage);
-            }
         );
     }
 
     private void handleRegister(String username, String password) {
         if (username.isEmpty() || password.isEmpty()) {
-            showError("Please enter both username and password");
+            showError("Пожалуйста, введите имя пользователя и пароль");
             return;
         }
 
         setLoading(true);
         AuthService.register(username, password,
-            token -> {
-                setLoading(false);
-                hideError();
-                NotificationService.showNotification("Success", "Account created successfully!", NotificationService.NotificationType.SUCCESS);
-                onLoginSuccess.accept(token);
-            },
-            error -> {
-                setLoading(false);
-                showError(error);
-            }
+                token -> {
+                    setLoading(false);
+                    hideError();
+                    NotificationService.showNotification("Успех", "Аккаунт успешно создан!", NotificationService.NotificationType.SUCCESS);
+                    onLoginSuccess.accept(token);
+                },
+                error -> {
+                    setLoading(false);
+                    showError(error);
+                }
         );
     }
 
@@ -170,11 +171,11 @@ public class LoginView {
         loadingIndicator.setVisible(loading);
         loadingIndicator.setManaged(loading);
         if (loading) {
-            loginButton.setText("Signing In...");
-            registerButton.setText("Signing Up...");
+            loginButton.setText("Вход...");
+            registerButton.setText("Регистрация...");
         } else {
-            loginButton.setText("Sign In");
-            registerButton.setText("Sign Up");
+            loginButton.setText("Войти");
+            registerButton.setText("Регистрация");
         }
     }
 }

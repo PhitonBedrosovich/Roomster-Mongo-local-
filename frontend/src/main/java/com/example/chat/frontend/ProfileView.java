@@ -4,18 +4,29 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
+import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.scene.shape.Circle;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.util.function.Consumer;
+import com.example.chat.frontend.PasswordToggleField;
+import java.util.prefs.Preferences;
 
 public class ProfileView {
     private final String username;
     private final Consumer<String> onBackToRooms;
     private VBox root;
+
+    private static final String AVATAR_PREF_KEY = "avatar_path_";
 
     public ProfileView(String username, Consumer<String> onBackToRooms) {
         this.username = username;
@@ -29,172 +40,190 @@ public class ProfileView {
         root.setPadding(new Insets(40));
         root.getStyleClass().add("card");
 
-        // Заголовок
-        Label titleLabel = new Label("User Profile");
+        Label titleLabel = new Label("Профиль пользователя");
         titleLabel.getStyleClass().addAll("title", "profile-title");
         titleLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 24));
-
-        // Аватар
-        Circle avatar = new Circle(50);
-        avatar.getStyleClass().add("profile-avatar");
-        avatar.setStyle("-fx-fill: #007bff;");
-
-        // Информация о пользователе
-        VBox userInfo = new VBox(15);
-        userInfo.setAlignment(Pos.CENTER);
-        userInfo.setMaxWidth(400);
 
         Label usernameLabel = new Label(username);
         usernameLabel.getStyleClass().addAll("profile-label", "profile-username", "profile-username-underline");
         usernameLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 16));
 
-        Label statusLabel = new Label("Online");
+        StackPane avatarPane = buildAvatarPane();
+
+        Label statusLabel = new Label("В сети");
         statusLabel.getStyleClass().addAll("profile-label", "profile-status");
 
-        // Настройки
         VBox settingsContainer = new VBox(15);
         settingsContainer.setAlignment(Pos.CENTER);
         settingsContainer.setMaxWidth(400);
 
-        Label settingsLabel = new Label("Settings");
+        Label settingsLabel = new Label("Настройки");
         settingsLabel.getStyleClass().addAll("profile-label", "profile-title");
         settingsLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
 
-        // Переключатели настроек
         HBox notificationSetting = new HBox(15);
         notificationSetting.setAlignment(Pos.CENTER_LEFT);
-        Label notificationLabel = new Label("Enable Notifications:");
+        Label notificationLabel = new Label("Уведомления:");
         CheckBox notificationCheckBox = new CheckBox();
         notificationCheckBox.setSelected(com.example.chat.frontend.service.NotificationService.isEnableNotifications());
-        // Связь с NotificationService
-        notificationCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
-            com.example.chat.frontend.service.NotificationService.setEnableNotifications(newVal);
-        });
+        notificationCheckBox.selectedProperty().addListener((obs, oldVal, newVal) ->
+                com.example.chat.frontend.service.NotificationService.setEnableNotifications(newVal));
         notificationSetting.getChildren().addAll(notificationLabel, notificationCheckBox);
 
         HBox soundSetting = new HBox(15);
         soundSetting.setAlignment(Pos.CENTER_LEFT);
-        Label soundLabel = new Label("Sound Notifications:");
+        Label soundLabel = new Label("Звук уведомлений:");
         CheckBox soundCheckBox = new CheckBox();
         soundCheckBox.setSelected(com.example.chat.frontend.service.NotificationService.isEnableSound());
-        // Связь с NotificationService
-        soundCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
-            com.example.chat.frontend.service.NotificationService.setEnableSound(newVal);
-        });
+        soundCheckBox.selectedProperty().addListener((obs, oldVal, newVal) ->
+                com.example.chat.frontend.service.NotificationService.setEnableSound(newVal));
         soundSetting.getChildren().addAll(soundLabel, soundCheckBox);
 
         HBox autoScrollSetting = new HBox(15);
         autoScrollSetting.setAlignment(Pos.CENTER_LEFT);
-        Label autoScrollLabel = new Label("Auto-scroll to new messages:");
+        Label autoScrollLabel = new Label("Автопрокрутка к новым сообщениям:");
         CheckBox autoScrollCheckBox = new CheckBox();
         autoScrollCheckBox.setSelected(true);
         autoScrollSetting.getChildren().addAll(autoScrollLabel, autoScrollCheckBox);
 
         settingsContainer.getChildren().addAll(settingsLabel, notificationSetting, soundSetting, autoScrollSetting);
 
-        // Кнопки
         HBox buttonContainer = new HBox(15);
         buttonContainer.setAlignment(Pos.CENTER);
 
-        Button backButton = new Button("Back to Rooms");
+        Button backButton = new Button("Назад к комнатам");
         backButton.getStyleClass().add("profile-back-btn");
-        backButton.setPrefWidth(150);
+        backButton.setPrefWidth(170);
         backButton.setPrefHeight(40);
 
-        Button changePasswordButton = new Button("Change Password");
+        Button changePasswordButton = new Button("Сменить пароль");
         changePasswordButton.getStyleClass().add("profile-danger-btn");
         changePasswordButton.setPrefWidth(150);
         changePasswordButton.setPrefHeight(40);
 
         buttonContainer.getChildren().addAll(backButton, changePasswordButton);
 
-        // Обработчики событий
         backButton.setOnAction(e -> onBackToRooms.accept(""));
         changePasswordButton.setOnAction(e -> showChangePasswordDialog());
 
-        userInfo.getChildren().addAll(usernameLabel, statusLabel);
-        root.getChildren().addAll(titleLabel, usernameLabel, avatar, userInfo, settingsContainer, buttonContainer);
+        root.getChildren().addAll(titleLabel, usernameLabel, avatarPane, statusLabel, settingsContainer, buttonContainer);
+    }
+
+    private StackPane buildAvatarPane() {
+        StackPane pane = new StackPane();
+        pane.setAlignment(Pos.CENTER);
+        pane.setMaxWidth(120);
+        pane.setMaxHeight(120);
+
+        Preferences prefs = Preferences.userRoot().node("roomster");
+        String savedPath = prefs.get(AVATAR_PREF_KEY + username, null);
+
+        Circle defaultCircle = new Circle(50);
+        defaultCircle.getStyleClass().add("profile-avatar");
+        defaultCircle.setStyle("-fx-fill: #007bff;");
+
+        ImageView imageView = new ImageView();
+        imageView.setFitWidth(100);
+        imageView.setFitHeight(100);
+        imageView.setPreserveRatio(false);
+        Circle clip = new Circle(50, 50, 50);
+        imageView.setClip(clip);
+        imageView.setVisible(false);
+
+        if (savedPath != null) {
+            loadAvatarImage(imageView, defaultCircle, savedPath);
+        }
+
+        Button changeAvatarBtn = new Button("📷");
+        changeAvatarBtn.setStyle(
+                "-fx-background-color: rgba(0,0,0,0.55);" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-size: 16px;" +
+                        "-fx-background-radius: 50%;" +
+                        "-fx-min-width: 34px; -fx-min-height: 34px;" +
+                        "-fx-max-width: 34px; -fx-max-height: 34px;" +
+                        "-fx-cursor: hand; -fx-padding: 0;"
+        );
+        StackPane.setAlignment(changeAvatarBtn, Pos.BOTTOM_RIGHT);
+        changeAvatarBtn.setTooltip(new Tooltip("Изменить фото профиля"));
+
+        changeAvatarBtn.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Выберите фото профиля");
+            chooser.getExtensionFilters().add(
+                    new FileChooser.ExtensionFilter("Изображения", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp")
+            );
+            Stage stage = (Stage) root.getScene().getWindow();
+            File file = chooser.showOpenDialog(stage);
+            if (file != null) {
+                String path = file.getAbsolutePath();
+                prefs.put(AVATAR_PREF_KEY + username, path);
+                loadAvatarImage(imageView, defaultCircle, path);
+            }
+        });
+
+        pane.getChildren().addAll(defaultCircle, imageView, changeAvatarBtn);
+        return pane;
+    }
+
+    private void loadAvatarImage(ImageView imageView, Circle defaultCircle, String path) {
+        try {
+            Image img = new Image(new FileInputStream(path), 100, 100, false, true);
+            imageView.setImage(img);
+            defaultCircle.setVisible(false);
+            imageView.setVisible(true);
+        } catch (Exception ex) {
+            defaultCircle.setVisible(true);
+            imageView.setVisible(false);
+        }
     }
 
     private void showChangePasswordDialog() {
         Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle("Change Password");
-        dialog.setHeaderText("Enter new password");
+        dialog.setTitle("Смена пароля");
+        dialog.setHeaderText("Введите новый пароль");
 
-        // Устанавливаем кнопки
-        ButtonType changeButtonType = new ButtonType("Change", ButtonBar.ButtonData.OK_DONE);
+        ButtonType changeButtonType = new ButtonType("Изменить", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(changeButtonType, ButtonType.CANCEL);
 
-        // Создаем поля ввода
-        PasswordField oldPasswordField = new PasswordField();
-        oldPasswordField.setPromptText("Current Password");
-        PasswordField newPasswordField = new PasswordField();
-        newPasswordField.setPromptText("New Password");
-        PasswordField confirmPasswordField = new PasswordField();
-        confirmPasswordField.setPromptText("Confirm New Password");
+        PasswordToggleField oldPasswordField = new PasswordToggleField("Текущий пароль");
+        PasswordToggleField newPasswordField = new PasswordToggleField("Новый пароль");
+        PasswordToggleField confirmPasswordField = new PasswordToggleField("Подтвердите новый пароль");
 
         VBox content = new VBox(10);
         content.getChildren().addAll(
-            new Label("Current Password:"), oldPasswordField,
-            new Label("New Password:"), newPasswordField,
-            new Label("Confirm Password:"), confirmPasswordField
+                new Label("Текущий пароль:"), oldPasswordField,
+                new Label("Новый пароль:"), newPasswordField,
+                new Label("Подтвердите пароль:"), confirmPasswordField
         );
         dialog.getDialogPane().setContent(content);
 
-        // Обработка результата
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == changeButtonType) {
                 if (!newPasswordField.getText().equals(confirmPasswordField.getText())) {
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle("Error");
-                    alert.setHeaderText("Passwords don't match");
-                    alert.setContentText("Please make sure the new passwords match.");
-                    alert.showAndWait();
+                    showAlert(Alert.AlertType.ERROR, "Ошибка", "Пароли не совпадают", "Убедитесь, что новые пароли совпадают.");
                     return null;
                 }
                 if (oldPasswordField.getText().isEmpty() || newPasswordField.getText().isEmpty()) {
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle("Error");
-                    alert.setHeaderText("Fields required");
-                    alert.setContentText("Please fill in all fields.");
-                    alert.showAndWait();
+                    showAlert(Alert.AlertType.ERROR, "Ошибка", "Заполните все поля", "Пожалуйста, заполните все поля.");
                     return null;
                 }
-                // Запрос на смену пароля
                 com.example.chat.frontend.service.AuthService.changePassword(
-                    username,
-                    oldPasswordField.getText(),
-                    newPasswordField.getText(),
-                    () -> {
-                        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                        alert.setTitle("Success");
-                        alert.setHeaderText("Password Changed");
-                        alert.setContentText("Your password has been changed successfully.");
-                        alert.showAndWait();
-                    },
-                    error -> {
-                        String userMessage = error;
-                        if (error != null) {
-                            // Убираем техническую часть, если есть
-                            if (userMessage.contains(":")) {
-                                userMessage = userMessage.substring(userMessage.indexOf(":") + 1).trim();
+                        username,
+                        oldPasswordField.getText(),
+                        newPasswordField.getText(),
+                        () -> showAlert(Alert.AlertType.INFORMATION, "Успех", "Пароль изменён", "Ваш пароль успешно изменён."),
+                        error -> {
+                            String msg = error;
+                            if (msg != null) {
+                                if (msg.contains(":")) msg = msg.substring(msg.indexOf(":") + 1).trim();
+                                if (msg.contains("Current password is incorrect")) msg = "Неверный текущий пароль.";
+                                else if (msg.contains("User not found")) msg = "Пользователь не найден.";
+                                else if (msg.toLowerCase().contains("connect") || msg.toLowerCase().contains("server")) msg = "Ошибка сервера. Попробуйте позже.";
+                                else if (msg.length() > 100) msg = "Не удалось изменить пароль. Попробуйте снова.";
                             }
-                            if (userMessage.contains("Current password is incorrect")) {
-                                userMessage = "Current password is incorrect.";
-                            } else if (userMessage.contains("User not found")) {
-                                userMessage = "User not found.";
-                            } else if (userMessage.toLowerCase().contains("connect") || userMessage.toLowerCase().contains("server")) {
-                                userMessage = "Server error. Please try again later.";
-                            } else if (userMessage.length() > 100) {
-                                userMessage = "Password change failed. Please try again.";
-                            }
+                            showAlert(Alert.AlertType.ERROR, "Ошибка", "Не удалось изменить пароль", msg);
                         }
-                        Alert alert = new Alert(Alert.AlertType.ERROR);
-                        alert.setTitle("Error");
-                        alert.setHeaderText("Password Change Failed");
-                        alert.setContentText(userMessage);
-                        alert.showAndWait();
-                    }
                 );
                 return "processing";
             }
@@ -204,7 +233,15 @@ public class ProfileView {
         dialog.showAndWait();
     }
 
+    private void showAlert(Alert.AlertType type, String title, String header, String content) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(header);
+        alert.setContentText(content);
+        alert.showAndWait();
+    }
+
     public Node getNode(ChatClient app) {
         return root;
     }
-} 
+}

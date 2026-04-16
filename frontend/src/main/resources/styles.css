@@ -379,9 +379,18 @@
 
 .root.dark-theme .text-field,
 .root.dark-theme .password-field {
-    -fx-background-color: #495057;
-    -fx-border-color: #6c757d;
-    -fx-text-fill: white;
+    -fx-background-color: #2b2f33;
+    -fx-border-color: #51cf66;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-text-fill: #e9ecef;
+    -fx-prompt-text-fill: #6c757d;
+}
+.root.dark-theme .text-field:focused,
+.root.dark-theme .password-field:focused {
+    -fx-border-color: #40c057;
+    -fx-effect: dropshadow(gaussian, rgba(81,207,102,0.35), 4, 0, 0, 0);
 }
 
 .root.dark-theme .list-view {
@@ -437,11 +446,11 @@
 
 .root.dark-theme .nav-bar .button.danger {
     -fx-text-fill: white;
-} 
+}
 
 .theme-button.sun-theme {
     -fx-text-fill: #FFD600;
-} 
+}
 
 /* --- Цветовая схема кнопок для светлой и темной тем --- */
 
@@ -538,7 +547,7 @@
 }
 .root .nav-bar .button.home-btn:hover {
     -fx-background-color: #7b1fa2;
-} 
+}
 
 .app-logo {
     -fx-font-size: 28px;
@@ -567,7 +576,7 @@
 .root.dark-theme .nav-bar {
     -fx-background-color: #495057;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 10, 0, 0, 2);
-} 
+}
 
 .custom-title-bar {
     -fx-background-color: white;
@@ -618,16 +627,16 @@
 .root.dark-theme .close-btn:hover {
     -fx-background-color: #ff6b6b;
     -fx-text-fill: white;
-} 
- 
+}
+
 .root .nav-bar .button.profile-btn {
     -fx-background-color: #43a047;
     -fx-text-fill: white;
 }
 .root .nav-bar .button.profile-btn:hover {
     -fx-background-color: #2e7031;
-} 
- 
+}
+
 .root .profile-label {
     -fx-text-fill: #000000 !important;
     -fx-font-size: 18px !important;
@@ -670,17 +679,17 @@
 }
 .root .profile-danger-btn:hover {
     -fx-background-color: #b71c1c !important;
-} 
- 
+}
+
 .root .profile-status {
     -fx-text-fill: #43a047 !important;
     -fx-font-style: italic !important;
-} 
- 
+}
+
 .root .profile-title {
     -fx-text-fill: #212529 !important;
-} 
- 
+}
+
 /* --- Улучшенная и разнообразная тёмная тема --- */
 .root.dark-theme {
     -fx-background-color: linear-gradient(to bottom, #23272e 0%, #181a20 100%);
@@ -701,5 +710,240 @@
     -fx-background-color: #181a20;
 }
 
-/* --- Конец улучшенной тёмной темы --- */ 
- 
+/* --- Конец улучшенной тёмной темы --- */
+
+/* ===================================================
+   ИСПРАВЛЕНИЯ ТЁМНОЙ ТЕМЫ — читаемость всех надписей
+   =================================================== */
+
+/* Все обычные лейблы */
+.root.dark-theme .label {
+    -fx-text-fill: #e9ecef;
+}
+
+/* Подзаголовки — чуть приглушённее */
+.root.dark-theme .label.subtitle {
+    -fx-text-fill: #adb5bd;
+}
+
+/* Заголовок профиля */
+.root.dark-theme .profile-title {
+    -fx-text-fill: #e9ecef !important;
+}
+
+/* Общие лейблы профиля */
+.root.dark-theme .profile-label {
+    -fx-text-fill: #e9ecef !important;
+}
+
+/* Статус "В сети" — зелёный */
+.root.dark-theme .profile-status {
+    -fx-text-fill: #51cf66 !important;
+}
+
+/* Имя пользователя — яркий акцент */
+.root.dark-theme .profile-username {
+    -fx-text-fill: #ff6b6b !important;
+}
+
+/* Заголовки экранов */
+.root.dark-theme .title {
+    -fx-text-fill: #e9ecef;
+}
+
+/* Текст в списках пользователей */
+.root.dark-theme .user-item .label {
+    -fx-text-fill: #e9ecef;
+}
+
+/* Чекбоксы */
+.root.dark-theme .check-box {
+    -fx-text-fill: #e9ecef;
+}
+.root.dark-theme .check-box .box {
+    -fx-background-color: #343a40;
+    -fx-border-color: #adb5bd;
+    -fx-border-radius: 3px;
+    -fx-background-radius: 3px;
+}
+.root.dark-theme .check-box:selected .box {
+    -fx-background-color: #339af0;
+    -fx-border-color: #339af0;
+}
+.root.dark-theme .check-box .mark {
+    -fx-background-color: white;
+}
+
+/* Поля ввода — текст внутри */
+.root.dark-theme .text-field,
+.root.dark-theme .password-field {
+    -fx-text-fill: #e9ecef;
+    -fx-prompt-text-fill: #6c757d;
+}
+
+/* Комбобокс */
+.root.dark-theme .combo-box {
+    -fx-background-color: #495057;
+    -fx-border-color: #6c757d;
+}
+.root.dark-theme .combo-box .list-cell {
+    -fx-text-fill: #e9ecef;
+    -fx-background-color: transparent;
+}
+.root.dark-theme .combo-box-popup .list-view {
+    -fx-background-color: #343a40;
+    -fx-border-color: #6c757d;
+}
+.root.dark-theme .combo-box-popup .list-cell {
+    -fx-text-fill: #e9ecef;
+    -fx-background-color: #343a40;
+}
+.root.dark-theme .combo-box-popup .list-cell:hover {
+    -fx-background-color: #495057;
+}
+
+/* Заголовок в LoginView */
+.root.dark-theme .app-title {
+    -fx-text-fill: #51cf66;
+}
+
+/* Разделитель Progress indicator */
+.root.dark-theme .progress-indicator {
+    -fx-progress-color: #339af0;
+}
+
+/* Название комнаты в списке */
+.root.dark-theme .room-list .list-cell {
+    -fx-text-fill: #e9ecef;
+    -fx-background-color: transparent;
+}
+.root.dark-theme .room-list .list-cell:selected {
+    -fx-background-color: #339af0;
+    -fx-text-fill: white;
+}
+.root.dark-theme .room-list .list-cell:hover {
+    -fx-background-color: #495057;
+}
+
+/* ================================
+   PASSWORD TOGGLE (ГЛАЗИК)
+   ================================ */
+
+/* Контейнер поля (обводка) — светлая тема */
+.password-toggle-box {
+    -fx-border-color: #007bff;
+    -fx-border-radius: 4px;
+    -fx-border-width: 1.5px;
+    -fx-background-color: white;
+    -fx-background-radius: 4px;
+}
+
+/* Контейнер — тёмная тема */
+.root.dark-theme .password-toggle-box {
+    -fx-border-color: #51cf66;
+    -fx-border-width: 1.5px;
+    -fx-background-color: #2b2f33;
+    -fx-background-radius: 4px;
+}
+
+/* Глазик — светлая тема */
+.eye-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-text-fill: #007bff;
+    -fx-font-size: 15px;
+    -fx-padding: 0 8px;
+    -fx-min-width: 34px;
+    -fx-max-width: 34px;
+    -fx-cursor: hand;
+    -fx-effect: none;
+}
+
+/* Hover */
+.eye-button:hover {
+    -fx-text-fill: #0056b3;
+}
+
+/* Нажатие */
+.eye-button:pressed {
+    -fx-background-color: transparent;
+}
+
+/* Глазик — тёмная тема */
+.root.dark-theme .eye-button {
+    -fx-text-fill: #51cf66;
+}
+
+.root.dark-theme .eye-button:hover {
+    -fx-text-fill: #40c057;
+}
+
+/* Текст внутри поля (фикс для тёмной темы) */
+.root.dark-theme .password-toggle-box .text-field,
+.root.dark-theme .password-toggle-box .password-field {
+    -fx-text-fill: #e9ecef;
+    -fx-prompt-text-fill: #6c757d;
+    -fx-background-color: transparent;
+}
+/* ===================================================
+   ДИАЛОГИ (Dialog) — тёмная тема
+   =================================================== */
+.root.dark-theme .dialog-pane {
+    -fx-background-color: #23272e;
+    -fx-border-color: #51cf66;
+    -fx-border-width: 1.5px;
+}
+.root.dark-theme .dialog-pane .header-panel {
+    -fx-background-color: #181a20;
+}
+.root.dark-theme .dialog-pane .header-panel .label {
+    -fx-text-fill: #e9ecef;
+}
+.root.dark-theme .dialog-pane .content.label {
+    -fx-text-fill: #e9ecef;
+}
+.root.dark-theme .dialog-pane > .button-bar > .container > .button {
+    -fx-background-color: #343a40;
+    -fx-text-fill: #e9ecef;
+}
+.root.dark-theme .dialog-pane > .button-bar > .container > .button:hover {
+    -fx-background-color: #51cf66;
+    -fx-text-fill: #181a20;
+}
+/* Лейблы внутри диалога */
+.root.dark-theme .dialog-pane .label {
+    -fx-text-fill: #e9ecef;
+}
+/* Поля внутри диалога смены пароля */
+.root.dark-theme .dialog-pane .password-toggle-box {
+    -fx-border-color: #51cf66;
+    -fx-background-color: #2b2f33;
+}
+.root.dark-theme .dialog-pane .text-field,
+.root.dark-theme .dialog-pane .password-field {
+    -fx-background-color: #2b2f33;
+    -fx-border-color: #51cf66;
+    -fx-text-fill: #e9ecef;
+    -fx-prompt-text-fill: #6c757d;
+}
+
+/* ===================================================
+   СПИСОК ПОЛЬЗОВАТЕЛЕЙ — светлый фон ячейки,
+   чёрный текст (и в тёмной теме тоже чёрный т.к.
+   фон .user-item светлый)
+   =================================================== */
+.user-item {
+    -fx-background-color: #f8f9fa;
+    -fx-border-color: #e9ecef;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 8px;
+    -fx-cursor: hand;
+}
+.root.dark-theme .user-item {
+    -fx-background-color: #e9ecef;
+    -fx-border-color: #ced4da;
+}
+.root.dark-theme .user-item.online {
+    -fx-border-color: #28a745;
+}

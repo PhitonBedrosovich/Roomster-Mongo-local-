@@ -36,7 +36,7 @@ public class TokenInfoView {
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(20));
 
-        Label titleLabel = new Label("JWT Token Information");
+        Label titleLabel = new Label("Информация о токене JWT");
         titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
         tokenInfoLabel = new Label();
@@ -46,10 +46,10 @@ public class TokenInfoView {
         statusLabel = new Label();
         statusLabel.setStyle("-fx-font-weight: bold;");
 
-        Button refreshButton = new Button("🔄 Refresh Token Info");
+        Button refreshButton = new Button("🔄 Обновить информацию о токене");
         refreshButton.setOnAction(e -> validateToken());
 
-        Button backButton = new Button("← Back to Chat");
+        Button backButton = new Button("← Вернуться в чат");
         backButton.setOnAction(e -> {
             // Возвращаемся к предыдущему экрану
             if (navigationController != null) {
@@ -57,7 +57,7 @@ public class TokenInfoView {
             }
         });
 
-        Button roomsButton = new Button("🏠 Go to Rooms");
+        Button roomsButton = new Button("🏠 Перейти в комнаты");
         roomsButton.setOnAction(e -> {
             // Переходим к списку комнат
             if (navigationController != null && onRoomSelected != null) {
@@ -77,7 +77,7 @@ public class TokenInfoView {
     private void validateToken() {
         try {
             // Показываем индикатор загрузки
-            statusLabel.setText("🔄 Validating token...");
+            statusLabel.setText("🔄 Проверка токена...");
             statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
 
             HttpClient client = HttpClient.newHttpClient();
@@ -101,26 +101,26 @@ public class TokenInfoView {
                 String expiresAt = (String) responseBody.get("expiresAt");
 
                 tokenInfoLabel.setText(String.format(
-                        "👤 Username: %s\n" +
-                                "🔑 Token: %s\n" +
-                                "⏰ Expires at: %s\n" +
-                                "✅ Status: Valid",
+                        "👤 Пользователь: %s\n" +
+                                "🔑 Токен: %s\n" +
+                                "⏰ Истекает: %s\n" +
+                                "✅ Статус: Действителен",
                         username,
                         currentToken.substring(0, Math.min(50, currentToken.length())) + "...",
                         expiresAt
                 ));
 
-                statusLabel.setText("✅ Token is valid");
+                statusLabel.setText("✅ Токен действителен");
                 statusLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
 
             } else {
-                tokenInfoLabel.setText("❌ Token validation failed\nResponse: " + response.body());
-                statusLabel.setText("❌ Token is invalid or expired");
+                tokenInfoLabel.setText("❌ Проверка токена не удалась\nОтвет: " + response.body());
+                statusLabel.setText("❌ Токен недействителен или истек");
                 statusLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
             }
         } catch (Exception e) {
-            tokenInfoLabel.setText("❌ Error validating token: " + e.getMessage());
-            statusLabel.setText("❌ Error occurred");
+            tokenInfoLabel.setText("❌ Ошибка проверки токена: " + e.getMessage());
+            statusLabel.setText("❌ Произошла ошибка");
             statusLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
         }
     }

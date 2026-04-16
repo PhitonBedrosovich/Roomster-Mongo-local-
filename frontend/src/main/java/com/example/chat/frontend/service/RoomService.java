@@ -39,13 +39,13 @@ public class RoomService {
                         return rooms;
                     } else {
                         // Fallback to default rooms if server doesn't provide them
-                        return List.of("General", "Sports", "Music", "Programming", "Gaming", "News");
+                        return List.of("Флуд", "Спорт", "Музыка", "Разработка", "Игры", "Новости");
                     }
                 } else {
-                    return List.of("General", "Sports", "Music", "Programming", "Gaming", "News");
+                    return List.of("Флуд", "Спорт", "Музыка", "Разработка", "Игры", "Новости");
                 }
             } catch (Exception e) {
-                return List.of("General", "Sports", "Music", "Programming", "Gaming", "News");
+                return List.of("Флуд", "Спорт", "Музыка", "Разработка", "Игры", "Новости");
             }
         });
     }

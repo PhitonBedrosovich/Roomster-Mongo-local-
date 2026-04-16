@@ -29,7 +29,7 @@ public class KeyStore {
      */
     public static void saveRoomKey(String room, SecretKey key) {
         if (room == null || key == null) {
-            throw new IllegalArgumentException("Room name and key must be non-null");
+            throw new IllegalArgumentException("Название комнаты и ключ должны быть непустыми");
         }
         roomKeys.put(room, key);
     }
@@ -60,7 +60,7 @@ public class KeyStore {
      */
     public static void savePairwiseKey(String username, SecretKey key) {
         if (username == null || key == null) {
-            throw new IllegalArgumentException("Username and key must be non-null");
+            throw new IllegalArgumentException("Имя пользователя и ключ не должны быть пустыми");
         }
         pairwiseKeys.put(username, key);
     }
@@ -91,7 +91,7 @@ public class KeyStore {
      */
     public static void saveIdentityKeyPair(KeyPair keyPair, String username) {
         if (keyPair == null || username == null) {
-            throw new IllegalArgumentException("KeyPair and username must be non-null");
+            throw new IllegalArgumentException("Пара ключей и имя пользователя должны быть заполнены");
         }
         myPrivateKey = keyPair.getPrivate();
         myPublicKey = keyPair.getPublic();
@@ -227,7 +227,7 @@ public class KeyStore {
      */
     public static void importIdentityKeys(String privateKeyBase64, String publicKeyBase64, String username) {
         if (privateKeyBase64 == null || publicKeyBase64 == null || username == null) {
-            throw new IllegalArgumentException("All parameters must be non-null");
+            throw new IllegalArgumentException("Все параметры должны быть заполнены");
         }
 
         try {
@@ -235,7 +235,7 @@ public class KeyStore {
             myPublicKey = CryptoService.publicKeyFromBase64(publicKeyBase64, "EC");
             currentUsername = username;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to import identity keys", e);
+            throw new RuntimeException("Не удалось импортировать ключи идентификации", e);
         }
     }
 

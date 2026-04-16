@@ -105,7 +105,7 @@ public class PersistentKeyStore {
         Files.createDirectories(path.getParent());
         mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), file);
 
-        logger.info("Keystore saved for user: {}", username);
+        logger.info("Хранилище ключей сохранено для пользователя: {}", username);
     }
 
     /**
@@ -119,7 +119,7 @@ public class PersistentKeyStore {
     public static void load(String username, char[] password) throws Exception {
         Path path = keystorePath(username);
         if (!path.toFile().exists()) {
-            throw new FileNotFoundException("Keystore not found: " + path);
+            throw new FileNotFoundException("Хранилище ключей не найдено: " + path);
         }
 
         // 1. Читаем внешнюю обёртку
@@ -158,7 +158,7 @@ public class PersistentKeyStore {
         // Pairwise ключи НЕ загружаем — они пересчитываются через ECDH при первом обращении.
         // Это гарантирует корректность даже если у собеседника обновились ключи.
 
-        logger.info("Keystore loaded for user: {} ({} room keys, pairwise keys will be recomputed via ECDH)",
+        logger.info("Для пользователя загружено хранилище ключей: {} ({} ключи комнат, попарные ключи будут пересчитаны через ECDH)",
                 username, roomKeys.size());
     }
 
@@ -168,9 +168,9 @@ public class PersistentKeyStore {
     public static void delete(String username) {
         try {
             Files.deleteIfExists(keystorePath(username));
-            logger.info("Keystore deleted for user: {}", username);
+            logger.info("Хранилище ключей удалено для пользователя: {}", username);
         } catch (IOException e) {
-            logger.warn("Failed to delete keystore for user: {}", username, e);
+            logger.warn("Не удалось удалить хранилище ключей для пользователя: {}", username, e);
         }
     }
 

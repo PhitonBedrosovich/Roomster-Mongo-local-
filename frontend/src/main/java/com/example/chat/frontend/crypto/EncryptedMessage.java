@@ -13,7 +13,7 @@ public class EncryptedMessage {
     
     public EncryptedMessage(byte[] nonce, byte[] ciphertext, byte[] authTag) {
         if (nonce == null || ciphertext == null || authTag == null) {
-            throw new IllegalArgumentException("All fields must be non-null");
+            throw new IllegalArgumentException("Все поля должны быть непустыми.");
         }
         this.nonce = nonce.clone();
         this.ciphertext = ciphertext.clone();
@@ -49,12 +49,12 @@ public class EncryptedMessage {
      */
     public static EncryptedMessage fromTransportFormat(String str) {
         if (str == null || str.isEmpty()) {
-            throw new IllegalArgumentException("Transport format string cannot be null or empty");
+            throw new IllegalArgumentException("Строка не может быть пустой или содержать значение null.");
         }
         
         String[] parts = str.split(":");
         if (parts.length != 3) {
-            throw new IllegalArgumentException("Invalid transport format. Expected format: Base64(nonce):Base64(ciphertext):Base64(authTag)");
+            throw new IllegalArgumentException("Неверный формат передачи данных. Ожидаемый формат: Base64(nonce):Base64(ciphertext):Base64(authTag)");
         }
         
         Base64.Decoder decoder = Base64.getDecoder();
@@ -65,7 +65,7 @@ public class EncryptedMessage {
             
             return new EncryptedMessage(nonce, ciphertext, authTag);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid Base64 encoding in transport format", e);
+            throw new IllegalArgumentException("Недопустимая кодировка Base64 в формате передачи", e);
         }
     }
     

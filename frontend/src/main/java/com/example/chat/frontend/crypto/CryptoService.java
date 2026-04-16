@@ -35,7 +35,7 @@ public class CryptoService {
             keyGenerator.init(AES_KEY_SIZE);
             return keyGenerator.generateKey();
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Failed to generate AES key", e);
+            throw new RuntimeException("Не удалось сгенерировать ключ AES", e);
         }
     }
     
@@ -49,7 +49,7 @@ public class CryptoService {
             keyPairGenerator.initialize(ecSpec);
             return keyPairGenerator.generateKeyPair();
         } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
-            throw new RuntimeException("Failed to generate EC key pair", e);
+            throw new RuntimeException("Не удалось сгенерировать пару ключей EC", e);
         }
     }
     
@@ -84,7 +84,7 @@ public class CryptoService {
             
             return new EncryptedMessage(nonce, ciphertextOnly, authTag);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to encrypt message", e);
+            throw new RuntimeException("Не удалось зашифровать сообщение", e);
         }
     }
     
@@ -113,9 +113,9 @@ public class CryptoService {
             byte[] plaintextBytes = cipher.doFinal(fullCiphertext);
             return new String(plaintextBytes, java.nio.charset.StandardCharsets.UTF_8);
         } catch (javax.crypto.AEADBadTagException e) {
-            throw new SecurityException("Failed to decrypt: message may be corrupted or key is incorrect", e);
+            throw new SecurityException("Не удалось расшифровать: сообщение может быть повреждено или ключ неверен", e);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to decrypt message", e);
+            throw new RuntimeException("Не удалось расшифровать сообщение", e);
         }
     }
     
@@ -133,7 +133,7 @@ public class CryptoService {
             keyAgreement.doPhase(publicKey, true);
             return keyAgreement.generateSecret();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to compute shared secret", e);
+            throw new RuntimeException("Не удалось вычислить общий ключ-токен", e);
         }
     }
     
@@ -169,7 +169,7 @@ public class CryptoService {
             
             return result;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to encrypt with shared secret", e);
+            throw new RuntimeException("Не удалось выполнить шифрование с использованием общего ключа-токена", e);
         }
     }
     
@@ -182,7 +182,7 @@ public class CryptoService {
      */
     public static byte[] decryptWithSharedSecret(byte[] encrypted, byte[] sharedSecret) {
         if (encrypted.length < GCM_NONCE_LENGTH + (GCM_TAG_LENGTH / 8)) {
-            throw new IllegalArgumentException("Encrypted data too short");
+            throw new IllegalArgumentException("Зашифрованные данные слишком короткие");
         }
         
         // Извлекаем nonce и ciphertext
@@ -200,9 +200,9 @@ public class CryptoService {
             
             return cipher.doFinal(ciphertext);
         } catch (javax.crypto.AEADBadTagException e) {
-            throw new SecurityException("Failed to decrypt: data may be corrupted or shared secret is incorrect", e);
+            throw new SecurityException("Не удалось расшифровать: данные могут быть повреждены или указан неверный секретный ключ", e);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to decrypt with shared secret", e);
+            throw new RuntimeException("Не удалось расшифровать данные с использованием общего ключа", e);
         }
     }
     
@@ -223,7 +223,7 @@ public class CryptoService {
             X509EncodedKeySpec keySpec = new X509EncodedKeySpec(keyBytes);
             return keyFactory.generatePublic(keySpec);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to decode public key from Base64", e);
+            throw new RuntimeException("Не удалось расшифровать открытый ключ из Base64", e);
         }
     }
     
@@ -244,7 +244,7 @@ public class CryptoService {
             java.security.spec.PKCS8EncodedKeySpec keySpec = new java.security.spec.PKCS8EncodedKeySpec(keyBytes);
             return keyFactory.generatePrivate(keySpec);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to decode private key from Base64", e);
+            throw new RuntimeException("Не удалось расшифровать закрытый ключ из Base64", e);
         }
     }
 }

@@ -45,14 +45,14 @@ public class KeyExchangeHandler {
             String encryptedKeyBase64 = (String) message.get("encryptedKey");
 
             if (encryptedKeyBase64 == null || sender == null) {
-                logger.warn("Invalid key_exchange message: missing required fields");
+                logger.warn("Сообщение об обмене ключами недействительно: отсутствуют обязательные поля");
                 return;
             }
 
             // Получаем публичный ключ отправителя
             PublicKey senderPublicKey = fetchPublicKey(sender);
             if (senderPublicKey == null) {
-                logger.warn("Failed to fetch public key for sender: {}", sender);
+                logger.warn("Не удалось получить открытый ключ отправителя: {}", sender);
                 return;
             }
 
@@ -72,7 +72,7 @@ public class KeyExchangeHandler {
             if ("room_key".equals(keyType)) {
                 if (room != null) {
                     KeyStore.saveRoomKey(room, key);
-                    logger.info("Room key received and saved for room: {}", room);
+                    logger.info("Ключ от номера получен и сохранен: {}", room);
                     onKeysUpdated.run(); // автосохранение keystore
                     Platform.runLater(() -> {
                         // UI обновится через updateUsers
@@ -81,7 +81,7 @@ public class KeyExchangeHandler {
             } else if ("pairwise_key".equals(keyType)) {
                 if (sender != null) {
                     KeyStore.savePairwiseKey(sender, key);
-                    logger.info("Pairwise key received and saved for user: {}", sender);
+                    logger.info("Получен и сохранен для пользователя парный ключ: {}", sender);
                     onKeysUpdated.run(); // автосохранение keystore
                 }
             }
@@ -100,20 +100,20 @@ public class KeyExchangeHandler {
             String room = (String) message.get("room");
 
             if (requester == null || room == null) {
-                logger.warn("Invalid key_request message: missing required fields");
+                logger.warn("Сообщение об обмене ключами недействительно: отсутствуют обязательные поля");
                 return;
             }
 
             // Проверяем, есть ли у нас ключ для этой комнаты
             if (!KeyStore.hasRoomKey(room)) {
-                logger.warn("Key requested for room {}, but we don't have the key", room);
+                logger.warn("Запрошен ключ от комнаты {}, но у нас его нет", room);
                 return;
             }
 
             // Получаем публичный ключ запрашивающего пользователя
             PublicKey requesterPublicKey = fetchPublicKey(requester);
             if (requesterPublicKey == null) {
-                logger.warn("Failed to fetch public key for requester: {}", requester);
+                logger.warn("Не удалось получить открытый ключ для запрашивающего лица: {}", requester);
                 return;
             }
 
@@ -131,7 +131,7 @@ public class KeyExchangeHandler {
             sendKeyExchangeMessage(requester, room, encryptedKeyBase64, "room_key");
 
         } catch (Exception e) {
-            logger.error("Error handling key_request message", e);
+            logger.error("Ошибка при обработке сообщения key_request", e);
         }
     }
 
@@ -148,9 +148,9 @@ public class KeyExchangeHandler {
 
             String jsonMessage = objectMapper.writeValueAsString(msg);
             sendWebSocketMessage.accept(jsonMessage);
-            logger.info("Key request sent for room: {}", roomName);
+            logger.info("Запрос на ключ от комнаты отправлен: {}", roomName);
         } catch (Exception e) {
-            logger.error("Error sending key request", e);
+            logger.error("Ошибка при отправке запроса ключа", e);
         }
     }
 
@@ -169,9 +169,9 @@ public class KeyExchangeHandler {
 
             String jsonMessage = objectMapper.writeValueAsString(msg);
             sendWebSocketMessage.accept(jsonMessage);
-            logger.info("Key exchange message sent to {} for room {}", recipient, room);
+            logger.info("Сообщение об обмене ключами отправлено в {} для комнаты {}", recipient, room);
         } catch (Exception e) {
-            logger.error("Error sending key exchange message", e);
+            logger.error("Ошибка при отправке сообщения об обмене ключами", e);
         }
     }
 
@@ -180,7 +180,7 @@ public class KeyExchangeHandler {
      */
     public void distributeRoomKey(String roomName, List<String> users) {
         if (!KeyStore.hasRoomKey(roomName)) {
-            logger.warn("Cannot distribute room key: key not found for room {}", roomName);
+            logger.warn("Не удалось распространить ключ комнаты: ключ для комнаты {} не найден", roomName);
             return;
         }
 
@@ -193,7 +193,7 @@ public class KeyExchangeHandler {
 
             RoomService.getPublicKeyAsync(username, token).thenAccept(publicKeyData -> {
                 if (publicKeyData == null) {
-                    logger.warn("Failed to get public key for user: {}", username);
+                    logger.warn("Не удалось получить открытый ключ для пользователя: {}", username);
                     return;
                 }
 
@@ -214,7 +214,7 @@ public class KeyExchangeHandler {
                     sendKeyExchangeMessage(username, roomName, encryptedKeyBase64, "room_key");
 
                 } catch (Exception e) {
-                    logger.error("Error distributing room key to user: " + username, e);
+                    logger.error("Ошибка при выдаче пользователю ключа от комнаты: " + username, e);
                 }
             });
         }
@@ -243,7 +243,7 @@ public class KeyExchangeHandler {
 
         RoomService.getPublicKeyAsync(otherUsername, token).thenAccept(publicKeyData -> {
             if (publicKeyData == null) {
-                logger.warn("Failed to get public key for user: {}", otherUsername);
+                logger.warn("Не удалось получить открытый ключ для пользователя: {}", otherUsername);
                 return;
             }
 
@@ -263,13 +263,13 @@ public class KeyExchangeHandler {
                 javax.crypto.SecretKey pairwiseKey = new javax.crypto.spec.SecretKeySpec(keyBytes, "AES");
 
                 KeyStore.savePairwiseKey(otherUsername, pairwiseKey);
-                logger.info("Pairwise key established with user: {}", otherUsername);
+                logger.info("Парный ключ устанавливается совместно с пользователем: {}", otherUsername);
                 onKeysUpdated.run(); // автосохранение keystore
 
                 if (onReady != null) onReady.run();
 
             } catch (Exception e) {
-                logger.error("Error establishing pairwise key with user: " + otherUsername, e);
+                logger.error("Ошибка при установлении парного ключа с пользователем: " + otherUsername, e);
             }
         });
     }
@@ -291,7 +291,7 @@ public class KeyExchangeHandler {
 
             return CryptoService.publicKeyFromBase64(publicKeyBase64, algorithm);
         } catch (Exception e) {
-            logger.error("Error fetching public key for user: " + username, e);
+            logger.error("Ошибка при получении открытого ключа для пользователя: " + username, e);
             return null;
         }
     }

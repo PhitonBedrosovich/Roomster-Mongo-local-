@@ -40,11 +40,11 @@ public class RoomListView {
         root.getStyleClass().add("card");
 
         // Заголовок
-        Label titleLabel = new Label("Chat Rooms");
+        Label titleLabel = new Label("Комнаты чата");
         titleLabel.getStyleClass().add("title");
         titleLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 24));
 
-        Label subtitleLabel = new Label("Select a room to join or create a new one");
+        Label subtitleLabel = new Label("Выберите комнату или создайте новую");
         subtitleLabel.getStyleClass().add("subtitle");
 
         // Список комнат
@@ -62,12 +62,12 @@ public class RoomListView {
         HBox buttonContainer = new HBox(15);
         buttonContainer.setAlignment(Pos.CENTER);
 
-        joinButton = new Button("Join Room");
+        joinButton = new Button("Войти в комнату");
         joinButton.getStyleClass().addAll("primary", "success");
         joinButton.setPrefWidth(120);
         joinButton.setPrefHeight(40);
 
-        deleteButton = new Button("Delete Room");
+        deleteButton = new Button("Удалить комнату");
         deleteButton.getStyleClass().addAll("danger");
         deleteButton.setPrefWidth(120);
         deleteButton.setPrefHeight(40);
@@ -79,18 +79,18 @@ public class RoomListView {
         createContainer.setAlignment(Pos.CENTER);
         createContainer.setMaxWidth(400);
 
-        Label createLabel = new Label("Create New Room");
+        Label createLabel = new Label("Создать новую комнату");
         createLabel.getStyleClass().add("subtitle");
 
         HBox inputContainer = new HBox(10);
         inputContainer.setAlignment(Pos.CENTER);
 
         newRoomField = new TextField();
-        newRoomField.setPromptText("Room name");
+        newRoomField.setPromptText("Название комнаты");
         newRoomField.setPrefHeight(40);
         newRoomField.setPrefWidth(200);
 
-        createButton = new Button("Create");
+        createButton = new Button("Создать");
         createButton.getStyleClass().addAll("success", "primary");
         createButton.setPrefWidth(100);
         createButton.setPrefHeight(40);
@@ -143,8 +143,8 @@ public class RoomListView {
             },
             error -> {
                 setLoading(false);
-                showStatus("Failed to load rooms: " + error, false);
-                NotificationService.showNotification("Error", "Failed to load rooms", NotificationService.NotificationType.ERROR);
+                showStatus("Не удалось загрузить комнаты: " + error, false);
+                NotificationService.showNotification("Ошибка", "Не удалось загрузить комнаты", NotificationService.NotificationType.ERROR);
             }
         );
     }
@@ -152,17 +152,17 @@ public class RoomListView {
     private void joinSelectedRoom() {
         String selected = roomList.getSelectionModel().getSelectedItem();
         if (selected != null) {
-            NotificationService.showNotification("Success", "Joining room: " + selected, NotificationService.NotificationType.INFO);
+            NotificationService.showNotification("Успех", "Вход в комнату: " + selected, NotificationService.NotificationType.INFO);
             onRoomSelected.accept(selected);
         } else {
-            showStatus("Please select a room first", false);
+            showStatus("Пожалуйста, выберите комнату", false);
         }
     }
 
     private void createNewRoom() {
         String roomName = newRoomField.getText().trim();
         if (roomName.isEmpty()) {
-            showStatus("Please enter a room name", false);
+            showStatus("Введите название комнаты", false);
             return;
         }
         setLoading(true);
@@ -170,18 +170,18 @@ public class RoomListView {
             success -> {
                 setLoading(false);
                 if (success) {
-                    showStatus("Room created successfully!", true);
+                    showStatus("Комната успешно создана!", true);
                     newRoomField.clear();
                     loadRooms();
-                    NotificationService.showNotification("Success", "Room '" + roomName + "' created!", NotificationService.NotificationType.SUCCESS);
+                    NotificationService.showNotification("Успех", "Комната '" + roomName + "' создана!", NotificationService.NotificationType.SUCCESS);
                 } else {
                     showStatus("Failed to create room", false);
                 }
             },
             error -> {
                 setLoading(false);
-                showStatus("Error: " + error, false);
-                NotificationService.showNotification("Error", "Server error: " + error, NotificationService.NotificationType.ERROR);
+                showStatus("Ошибка: " + error, false);
+                NotificationService.showNotification("Ошибка", "Ошибка сервера: " + error, NotificationService.NotificationType.ERROR);
             }
         );
     }
@@ -189,14 +189,14 @@ public class RoomListView {
     private void deleteSelectedRoom() {
         String selected = roomList.getSelectionModel().getSelectedItem();
         if (selected == null) {
-            showStatus("Please select a room to delete", false);
+            showStatus("Выберите комнату для удаления", false);
             return;
         }
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Delete Room");
-        alert.setHeaderText("Are you sure?");
-        alert.setContentText("Do you want to delete room '" + selected + "'? This action cannot be undone.");
+        alert.setTitle("Удаление комнаты");
+        alert.setHeaderText("Вы уверены?");
+        alert.setContentText("Удалить комнату '" + selected + "'? Это действие необратимо.");
 
         alert.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
@@ -205,16 +205,16 @@ public class RoomListView {
                     success -> {
                         setLoading(false);
                         if (success) {
-                            showStatus("Room deleted successfully!", true);
+                            showStatus("Комната успешно удалена!", true);
                             loadRooms();
-                            NotificationService.showNotification("Success", "Room '" + selected + "' deleted!", NotificationService.NotificationType.SUCCESS);
+                            NotificationService.showNotification("Успех", "Комната '" + selected + "' удалена!", NotificationService.NotificationType.SUCCESS);
                         } else {
-                            showStatus("Failed to delete room", false);
+                            showStatus("Не удалось удалить комнату", false);
                         }
                     },
                     error -> {
                         setLoading(false);
-                        showStatus("Error: " + error, false);
+                        showStatus("Ошибка: " + error, false);
                     }
                 );
             }

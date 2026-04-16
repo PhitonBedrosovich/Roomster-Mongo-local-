@@ -37,13 +37,13 @@ public class AuthService {
                     if (responseBody.containsKey("token")) {
                         return responseBody.get("token");
                     } else {
-                        throw new RuntimeException("Unknown server response");
+                        throw new RuntimeException("Неизвестный ответ сервера");
                     }
                 } else {
                     throw new RuntimeException(response.body() != null ? response.body() : "Login failed");
                 }
             } catch (Exception e) {
-                throw new RuntimeException("Error connecting to server: " + e.getMessage(), e);
+                throw new RuntimeException("Ошибка подключения к серверу: " + e.getMessage(), e);
             }
         });
     }
@@ -68,13 +68,13 @@ public class AuthService {
                     if (responseBody.containsKey("token")) {
                         return responseBody.get("token");
                     } else {
-                        throw new RuntimeException("Unknown server response");
+                        throw new RuntimeException("Неизвестный ответ сервера");
                     }
                 } else {
-                    throw new RuntimeException(response.body() != null ? response.body() : "Registration failed");
+                    throw new RuntimeException(response.body() != null ? response.body() : "Регистрация не удалась");
                 }
             } catch (Exception e) {
-                throw new RuntimeException("Error connecting to server: " + e.getMessage(), e);
+                throw new RuntimeException("Ошибка подключения к серверу: " + e.getMessage(), e);
             }
         });
     }
@@ -97,10 +97,10 @@ public class AuthService {
                 if (response.statusCode() == 200) {
                     return true;
                 } else {
-                    throw new RuntimeException(response.body() != null ? response.body() : "Password change failed");
+                    throw new RuntimeException(response.body() != null ? response.body() : "Сменить пароль не удалось");
                 }
             } catch (Exception e) {
-                throw new RuntimeException("Error connecting to server: " + e.getMessage(), e);
+                throw new RuntimeException("Ошибка подключения к серверу: " + e.getMessage(), e);
             }
         });
     }

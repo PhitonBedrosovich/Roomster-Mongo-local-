@@ -18,6 +18,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+
 public class ChatView {
     private final BiConsumer<String, String> onSendMessage;
     private final ListView<MessageItem> messageList;
@@ -170,7 +174,7 @@ public class ChatView {
             String username  = (String) msg.get("username");
             boolean isPrivate = recipient != null && !recipient.isEmpty();
             if (!isPrivate || username.equals(currentUser) || recipient.equals(currentUser)) {
-                String timestamp = (String) msg.get("timestamp");
+                String timestamp = extractTimestamp(msg);
                 String dateStr = formatDateLabel(timestamp);
                 if (dateStr != null && !dateStr.equals(lastDate)) {
                     messageList.getItems().add(new MessageItem(null, null, dateStr, false, false, null));
@@ -184,7 +188,7 @@ public class ChatView {
 
     public void updateSingleMessage(Map<String, Object> updatedMsg) {
         String username   = (String) updatedMsg.get("username");
-        String timestamp  = (String) updatedMsg.get("timestamp");
+        String timestamp = extractTimestamp(updatedMsg);
         String newContent = (String) updatedMsg.get("content");
         for (int i = 0; i < messageList.getItems().size(); i++) {
             MessageItem item = messageList.getItems().get(i);
@@ -204,7 +208,7 @@ public class ChatView {
         String username  = (String) msg.get("username");
         boolean isPrivate = recipient != null && !recipient.isEmpty();
         if (!isPrivate || username.equals(currentUser) || recipient.equals(currentUser)) {
-            String timestamp = (String) msg.get("timestamp");
+            String timestamp = extractTimestamp(msg);
             String dateStr = formatDateLabel(timestamp);
             if (dateStr != null) {
                 boolean needSeparator = true;
@@ -263,10 +267,14 @@ public class ChatView {
     private MessageItem createMessageItem(Map<String, Object> msg) {
         String username  = (String) msg.get("username");
         String content   = (String) msg.get("content");
-        String timestamp = (String) msg.get("timestamp");
+        // extractTimestamp обрабатывает и строку и массив [year,month,day,h,m,s]
+        String timestamp = extractTimestamp(msg);
         String recipient = (String) msg.get("recipient");
-        boolean isOwn     = username.equals(currentUser);
-        boolean isPrivate = recipient != null && !recipient.isEmpty();
+        boolean isOwn     = username != null && username.equals(currentUser);
+        // Jackson сериализует boolean isPrivate -> ключ "private"
+        Object privObj = msg.get("private");
+        boolean isPrivate = (privObj instanceof Boolean && (Boolean) privObj)
+                || (recipient != null && !recipient.isEmpty());
         return new MessageItem(username, content, timestamp, isOwn, isPrivate, recipient);
     }
 
@@ -278,6 +286,43 @@ public class ChatView {
     public String getRoom() { return room; }
 
     // ── Вспомогательные методы для форматирования времени ───────────────────
+
+    /**
+     * Универсально извлекает timestamp из Map — обрабатывает оба формата которые
+     * может прислать Jackson:
+     *   - Строка:  "2026-04-16T12:30:00"  (если JavaTimeModule + WRITE_DATES_AS_TIMESTAMPS=false)
+     *   - Массив:  [2026, 4, 16, 12, 30, 0]  (Jackson по умолчанию для LocalDateTime)
+     * Серверную часть трогать не нужно.
+     */
+    static String extractTimestamp(Map<String, Object> msg) {
+        // Пробуем сначала "createdAt", потом "timestamp" для совместимости
+        Object raw = msg.get("createdAt");
+        if (raw == null) raw = msg.get("timestamp");
+        if (raw == null) return null;
+
+        // Формат 1: уже строка ISO
+        if (raw instanceof String) return (String) raw;
+
+        // Формат 2: массив [year, month, day, hour, minute, second?, nano?]
+        if (raw instanceof java.util.List) {
+            try {
+                java.util.List<?> arr = (java.util.List<?>) raw;
+                if (arr.size() < 5) return null;
+                int year   = ((Number) arr.get(0)).intValue();
+                int month  = ((Number) arr.get(1)).intValue();
+                int day    = ((Number) arr.get(2)).intValue();
+                int hour   = ((Number) arr.get(3)).intValue();
+                int minute = ((Number) arr.get(4)).intValue();
+                int second = arr.size() > 5 ? ((Number) arr.get(5)).intValue() : 0;
+                // Собираем в ISO-строку которую уже умеем парсить
+                return String.format("%04d-%02d-%02dT%02d:%02d:%02d",
+                        year, month, day, hour, minute, second);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return null;
+    }
 
     /** Дата для разделителя: DD.MM.YYYY */
     private String formatDateLabel(String ts) {
@@ -291,12 +336,21 @@ public class ChatView {
 
     /** Время для отображения в углу сообщения: ЧЧ:ММ */
     static String formatTime(String ts) {
-        if (ts == null || ts.length() < 16) return "";
-        try {
-            // Берём подстроку HH:mm напрямую из ISO-строки (быстро, без парсинга)
-            String timePart = ts.substring(11, 16); // "HH:mm"
-            return timePart;
-        } catch (Exception e) { return ""; }
+        if (ts == null) return "";
+
+        for (DateTimeFormatter fmt : PARSE_FMTS) {
+            try {
+                LocalDateTime ldt = LocalDateTime.parse(ts, fmt);
+
+                ZonedDateTime utc = ldt.atZone(ZoneOffset.UTC);
+                ZonedDateTime local = utc.withZoneSameInstant(ZoneId.systemDefault());
+
+                return local.format(TIME_FMT);
+
+            } catch (Exception ignored) {}
+        }
+
+        return "";
     }
 
     // ── Модели данных ────────────────────────────────────────────────────────
@@ -384,15 +438,13 @@ public class ChatView {
             if (isDark) {
                 colorUsername = "#e9ecef";
                 colorTime     = "#adb5bd";
-                colorContent  = item.isOwn() ? "#ffffff"
-                        : item.isPrivate() ? "#e0c3fc"
-                          : "#51cf66";   // ← зелёный для чужих в тёмной теме
+                // Тёмная тема: все чужие сообщения зелёные (и обычные, и приватные)
+                colorContent  = item.isOwn() ? "#ffffff" : "#51cf66";
             } else {
                 colorUsername = "#212529";
                 colorTime     = "#6c757d";
-                colorContent  = item.isOwn() ? "#212529"
-                        : item.isPrivate() ? "#6f42c1"
-                          : "#007bff";   // ← синий для чужих в светлой теме
+                // Светлая тема: все чужие сообщения синие (и обычные, и приватные)
+                colorContent  = item.isOwn() ? "#212529" : "#007bff";
             }
 
             // Имя пользователя

@@ -22,7 +22,7 @@ services:
       retries: 5
 
   app:
-    image: rchard237/roomster-app
+    image: rchard237/roomster-app2
     container_name: roomster-app
     depends_on:
       redis:

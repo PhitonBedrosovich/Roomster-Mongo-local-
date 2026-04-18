@@ -258,8 +258,7 @@ public class KeyExchangeHandler {
                         publicKey
                 );
 
-                byte[] keyBytes = new byte[32];
-                System.arraycopy(sharedSecret, 0, keyBytes, 0, Math.min(32, sharedSecret.length));
+                byte[] keyBytes = CryptoService.deriveKeyFromSharedSecret(sharedSecret);
                 javax.crypto.SecretKey pairwiseKey = new javax.crypto.spec.SecretKeySpec(keyBytes, "AES");
 
                 KeyStore.savePairwiseKey(otherUsername, pairwiseKey);
@@ -283,16 +282,50 @@ public class KeyExchangeHandler {
                     RoomService.getPublicKeyAsync(username, token);
 
             Map<String, String> publicKeyData = future.get();
-
             if (publicKeyData == null) return null;
 
             String publicKeyBase64 = publicKeyData.get("publicKey");
             String algorithm = publicKeyData.getOrDefault("algorithm", "EC").toString();
 
+            // TOFU: вычисляем fingerprint и сравниваем с сохранённым
+            String fingerprint = computeFingerprint(publicKeyBase64);
+            String known = PersistentKeyStore.getKnownFingerprint(username);
+
+            if (known == null) {
+                // Первый контакт — сохраняем fingerprint
+                PersistentKeyStore.saveKnownFingerprint(username, fingerprint);
+                logger.info("TOFU: сохранён fingerprint для {}: {}", username, fingerprint);
+            } else if (!known.equals(fingerprint)) {
+                // Ключ изменился — предупреждаем
+                logger.warn("TOFU: ключ пользователя {} изменился! Старый: {}, новый: {}", username, known, fingerprint);
+                throw new SecurityException("Ключ пользователя " + username +
+                        " изменился. Возможна MITM-атака. Fingerprint: " + fingerprint);
+            }
+
             return CryptoService.publicKeyFromBase64(publicKeyBase64, algorithm);
+        } catch (SecurityException e) {
+            throw e;
         } catch (Exception e) {
             logger.error("Ошибка при получении открытого ключа для пользователя: " + username, e);
             return null;
+        }
+    }
+
+    /**
+     * Вычисляет SHA-256 fingerprint публичного ключа.
+     */
+    private String computeFingerprint(String publicKeyBase64) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(java.util.Base64.getDecoder().decode(publicKeyBase64));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                sb.append(String.format("%02X", hash[i]));
+                if (i < 7) sb.append(":");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Не удалось вычислить fingerprint", e);
         }
     }
 }

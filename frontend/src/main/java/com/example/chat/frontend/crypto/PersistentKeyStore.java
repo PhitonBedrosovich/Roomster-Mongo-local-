@@ -174,6 +174,42 @@ public class PersistentKeyStore {
         }
     }
 
+    /**
+     * Сохраняет известный fingerprint публичного ключа пользователя (TOFU).
+     */
+    public static void saveKnownFingerprint(String username, String fingerprint) {
+        try {
+            String safeUsername = username.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+            Path path = Paths.get(BASE_DIR, safeUsername, "fingerprints.json");
+            Files.createDirectories(path.getParent());
+
+            Map<String, String> fps = new LinkedHashMap<>();
+            if (path.toFile().exists()) {
+                fps = mapper.readValue(path.toFile(), Map.class);
+            }
+            fps.put(username, fingerprint);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), fps);
+        } catch (Exception e) {
+            logger.warn("Не удалось сохранить fingerprint для {}: {}", username, e.getMessage());
+        }
+    }
+
+    /**
+     * Возвращает сохранённый fingerprint публичного ключа пользователя или null.
+     */
+    public static String getKnownFingerprint(String username) {
+        try {
+            String safeUsername = username.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+            Path path = Paths.get(BASE_DIR, safeUsername, "fingerprints.json");
+            if (!path.toFile().exists()) return null;
+            Map<String, String> fps = mapper.readValue(path.toFile(), Map.class);
+            return fps.get(username);
+        } catch (Exception e) {
+            logger.warn("Не удалось загрузить fingerprint для {}: {}", username, e.getMessage());
+            return null;
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Вспомогательные методы
     // ─────────────────────────────────────────────────────────────────────────

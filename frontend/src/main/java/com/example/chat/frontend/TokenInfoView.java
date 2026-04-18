@@ -85,7 +85,7 @@ public class TokenInfoView {
             String body = mapper.writeValueAsString(Map.of("token", currentToken));
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("http://212.34.128.37:8081/api/auth/validate"))
+                    .uri(URI.create("https://roomster.duckdns.org/api/auth/validate"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();

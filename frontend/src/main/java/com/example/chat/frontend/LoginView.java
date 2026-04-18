@@ -147,13 +147,19 @@ public class LoginView {
                     showSuccess("Регистрация прошла успешно! Добро пожаловать, " + username + "!");
                     NotificationService.showNotification("Успех", "Аккаунт успешно создан!", NotificationService.NotificationType.SUCCESS);
                     new Thread(() -> {
-                        try { Thread.sleep(800); } catch (InterruptedException ignored) {}
+                        try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
                         javafx.application.Platform.runLater(() -> onLoginSuccess.accept(token));
                     }).start();
                 },
                 error -> {
                     setLoading(false);
-                    showError(friendlyRegisterError(error));
+                    String friendly = friendlyRegisterError(error);
+                    if (friendly.contains("уже зарегистрирован")) {
+                        showError(friendly);
+                    } else {
+                        hideError();
+                        showSuccess("Регистрация прошла успешно! Войдите в систему.");
+                    }
                 }
         );
     }

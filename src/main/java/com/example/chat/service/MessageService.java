@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class MessageService {
@@ -22,37 +23,46 @@ public class MessageService {
     @Autowired
     private RedisTemplate<String, List<Message>> redisTemplate;
 
-    public List<Message> getRoomMessages(String room, LocalDateTime registeredAt) {
-        String key = "room:messages:" + room + ":" + registeredAt.toString();
-        System.out.println("getRoomMessages called for room: " + room + ", registeredAt: " + registeredAt);
+    public List<Message> getRoomMessages(String room, LocalDateTime registeredAt, String username) {
+        String key = "room:messages:" + room + ":" + registeredAt.toString() + ":" + username;
         List<Message> messages = null;
         try {
             messages = redisTemplate.opsForValue().get(key);
         } catch (Exception e) {
-            System.out.println("[WARN] Redis недоступен, кэширование отключено: " + e.getMessage());
+            System.out.println("[WARN] Redis недоступен: " + e.getMessage());
         }
         if (messages == null) {
-            System.out.println("Redis cache MISS for key: " + key);
-            Query query = new Query(Criteria.where("room").is(room)
-                    .and("createdAt").gte(registeredAt)).limit(50);
+            // Публичные сообщения комнаты + приватные где пользователь отправитель или получатель
+            Criteria criteria = new Criteria().andOperator(
+                    Criteria.where("createdAt").gte(registeredAt),
+                    new Criteria().orOperator(
+                            // Публичные сообщения комнаты
+                            Criteria.where("room").is(room).and("isPrivate").is(false),
+                            // Приватные где я отправитель
+                            Criteria.where("room").is(room).and("isPrivate").is(true).and("username").is(username),
+                            // Приватные где я получатель
+                            Criteria.where("room").is(room).and("isPrivate").is(true).and("recipient").is(username)
+                    )
+            );
+            Query query = new Query(criteria).limit(50);
             messages = mongoTemplate.find(query, Message.class);
-            System.out.println("Loaded from MongoDB, count: " + messages.size());
             try {
                 redisTemplate.opsForValue().set(key, messages, CACHE_TTL);
             } catch (Exception e) {
-                System.out.println("[WARN] Redis недоступен, не удалось записать кэш: " + e.getMessage());
+                System.out.println("[WARN] Redis недоступен: " + e.getMessage());
             }
-        } else {
-            System.out.println("Redis cache HIT for key: " + key);
         }
         return messages;
     }
 
-    public void invalidateRoomCache(String room, LocalDateTime registeredAt) {
-        String key = "room:messages:" + room + ":" + registeredAt.toString();
-        System.out.println("Redis cache INVALIDATE for key: " + key);
+    public void invalidateRoomCache(String room) {
+        // Удаляем все ключи для этой комнаты по паттерну
+        String pattern = "room:messages:" + room + ":*";
         try {
-            redisTemplate.delete(key);
+            Set<String> keys = redisTemplate.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
         } catch (Exception e) {
             System.out.println("[WARN] Redis недоступен, не удалось сбросить кэш: " + e.getMessage());
         }

@@ -13,7 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public class RoomService {
-    private static final String BASE_URL = "http://212.34.128.37:8081";
+    private static final String BASE_URL = "https://roomster.duckdns.org";
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final HttpClient httpClient = HttpClient.newHttpClient();
 

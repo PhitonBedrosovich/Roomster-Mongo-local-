@@ -168,7 +168,7 @@ public class ChatWebSocketServer extends WebSocketServer {
                 LocalDateTime userRegisteredAt = user != null ? user.getRegisteredAt() : LocalDateTime.now();
 
                 // Используем кэшированную историю сообщений
-                List<Message> history = messageService.getRoomMessages(room, userRegisteredAt);
+                List<Message> history = messageService.getRoomMessages(room, userRegisteredAt, username);
                 try {
                     conn.send(objectMapper.writeValueAsString(Map.of("type", "history", "messages", history)));
                     logger.info("Sent {} filtered history messages to {} (registered at: {})",
@@ -189,9 +189,7 @@ public class ChatWebSocketServer extends WebSocketServer {
                 logger.debug("Message saved to database");
 
                 // Сброс кэша истории комнаты для всех пользователей
-                User user = userService.findByUsername(username);
-                LocalDateTime userRegisteredAt = user != null ? user.getRegisteredAt() : LocalDateTime.now();
-                messageService.invalidateRoomCache(room, userRegisteredAt);
+                messageService.invalidateRoomCache(room);
 
                 // Публикуем сообщение в Redis — broadcastFromRedis() сам разошлёт по WebSocket.
                 // Прямой broadcast убран, чтобы не дублировать: иначе каждый клиент получал бы

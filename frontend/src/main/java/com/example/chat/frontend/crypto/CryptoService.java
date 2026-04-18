@@ -136,7 +136,24 @@ public class CryptoService {
             throw new RuntimeException("Не удалось вычислить общий ключ-токен", e);
         }
     }
-    
+
+    /**
+     * Извлекает AES-256 ключ из ECDH shared secret через HKDF (RFC 5869).
+     */
+    public static byte[] deriveKeyFromSharedSecret(byte[] sharedSecret) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(new byte[32], "HmacSHA256"));
+            byte[] prk = mac.doFinal(sharedSecret);
+            mac.init(new SecretKeySpec(prk, "HmacSHA256"));
+            mac.update("roomster-key".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            mac.update((byte) 1);
+            return Arrays.copyOf(mac.doFinal(), 32);
+        } catch (Exception e) {
+            throw new RuntimeException("Не удалось извлечь ключ из shared secret", e);
+        }
+    }
+
     /**
      * Шифрует данные с использованием shared secret от ECDH.
      * Использует AES-256-GCM с ключом, производным от shared secret через HKDF.
@@ -148,7 +165,7 @@ public class CryptoService {
     public static byte[] encryptWithSharedSecret(byte[] data, byte[] sharedSecret) {
         // Упрощенная версия: используем первые 32 байта shared secret как AES ключ
         // В production лучше использовать HKDF для извлечения ключа
-        byte[] keyBytes = Arrays.copyOf(sharedSecret, 32);
+        byte[] keyBytes = deriveKeyFromSharedSecret(sharedSecret);
         SecretKey key = new SecretKeySpec(keyBytes, AES_ALGORITHM);
         
         try {
@@ -190,7 +207,7 @@ public class CryptoService {
         byte[] ciphertext = Arrays.copyOfRange(encrypted, GCM_NONCE_LENGTH, encrypted.length);
         
         // Создаем ключ из shared secret
-        byte[] keyBytes = Arrays.copyOf(sharedSecret, 32);
+        byte[] keyBytes = deriveKeyFromSharedSecret(sharedSecret);
         SecretKey key = new SecretKeySpec(keyBytes, AES_ALGORITHM);
         
         try {

@@ -551,7 +551,7 @@ public class ChatClient extends Application {
             }
 
             // Создаем WebSocket клиент с кастомными заголовками для передачи токена
-            wsClient = new WebSocketClient(new URI("ws://212.34.128.37:8082")) {
+            wsClient = new WebSocketClient(new URI("wss://roomster.duckdns.org/ws")) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
                     Map<String, Object> joinMessage = new HashMap<>();
@@ -619,12 +619,32 @@ public class ChatClient extends Application {
                         } else if ("key_exchange".equals(type)) {
                             // Обрабатываем обмен ключами
                             if (keyExchangeHandler != null) {
-                                keyExchangeHandler.handleKeyExchange(typeProbe);
+                                try {
+                                    keyExchangeHandler.handleKeyExchange(typeProbe);
+                                } catch (SecurityException e) {
+                                    Platform.runLater(() -> {
+                                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                                        alert.setTitle("Угроза безопасности");
+                                        alert.setHeaderText("⚠️ Обнаружена возможная MITM-атака!");
+                                        alert.setContentText(e.getMessage());
+                                        alert.showAndWait();
+                                    });
+                                }
                             }
                         } else if ("key_request".equals(type)) {
                             // Обрабатываем запрос ключа
                             if (keyExchangeHandler != null) {
-                                keyExchangeHandler.handleKeyRequest(typeProbe);
+                                try {
+                                    keyExchangeHandler.handleKeyRequest(typeProbe);
+                                } catch (SecurityException e) {
+                                    Platform.runLater(() -> {
+                                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                                        alert.setTitle("Угроза безопасности");
+                                        alert.setHeaderText("⚠️ Обнаружена возможная MITM-атака!");
+                                        alert.setContentText(e.getMessage());
+                                        alert.showAndWait();
+                                    });
+                                }
                             }
                         }
                     } catch (Exception e) {

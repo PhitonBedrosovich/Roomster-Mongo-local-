@@ -37,6 +37,13 @@ import javafx.geometry.Pos;
 import javafx.geometry.Insets;
 import javafx.scene.layout.Priority;
 import javafx.stage.StageStyle;
+import java.awt.AWTException;
+import java.awt.Image;
+import java.awt.MenuItem;
+import java.awt.PopupMenu;
+import java.awt.SystemTray;
+import java.awt.TrayIcon;
+import java.awt.Toolkit;
 
 public class ChatClient extends Application {
     private static final Logger logger = LoggerFactory.getLogger(ChatClient.class);
@@ -58,6 +65,8 @@ public class ChatClient extends Application {
     private char[] keystorePassword;
     // Ссылка на главное окно — нужна чтобы диалоги открывались поверх него
     private Stage primaryStage;
+    @SuppressWarnings("unchecked")
+    private final TrayIcon[] trayIconRef = new TrayIcon[1];
 
     // Вспомогательные классы для десериализации
     private static class HistoryPayload {
@@ -135,6 +144,68 @@ public class ChatClient extends Application {
         primaryStage.initStyle(StageStyle.UNDECORATED);
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        // ── Системный трей ────────────────────────────────────────────────────
+        if (SystemTray.isSupported()) {
+            // Разрешаем JVM жить без окна (чтобы трей остался после скрытия окна)
+            javafx.application.Platform.setImplicitExit(false);
+
+            SystemTray tray = SystemTray.getSystemTray();
+
+            // Иконка — берём из ресурсов, если нет — стандартная Java
+            java.net.URL iconUrl = getClass().getResource("/tray_icon.png");
+            Image trayImage = iconUrl != null
+                    ? Toolkit.getDefaultToolkit().getImage(iconUrl)
+                    : Toolkit.getDefaultToolkit().getImage(
+                    getClass().getResource("/styles.css").getPath()
+                    .replace("styles.css", "tray_icon.png"));
+            // Запасной вариант — белый квадрат 16x16
+            if (trayImage == null) {
+                trayImage = new java.awt.image.BufferedImage(16, 16,
+                        java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            }
+
+            PopupMenu popup = new PopupMenu();
+
+            MenuItem showItem = new MenuItem("Открыть Roomster");
+            showItem.addActionListener(e -> javafx.application.Platform.runLater(() -> {
+                primaryStage.show();
+                primaryStage.toFront();
+            }));
+
+            MenuItem exitItem = new MenuItem("Закрыть");
+            exitItem.addActionListener(e -> {
+                javafx.application.Platform.runLater(() -> primaryStage.close());
+                tray.remove(trayIconRef[0]);
+                javafx.application.Platform.exit();
+                System.exit(0);
+            });
+
+            popup.add(showItem);
+            popup.addSeparator();
+            popup.add(exitItem);
+
+            TrayIcon trayIcon = new TrayIcon(trayImage, "Roomster", popup);
+            trayIcon.setImageAutoSize(true);
+            // Двойной клик по иконке — показать окно
+            trayIcon.addActionListener(e -> javafx.application.Platform.runLater(() -> {
+                primaryStage.show();
+                primaryStage.toFront();
+            }));
+
+            trayIconRef[0] = trayIcon;
+
+            try {
+                tray.add(trayIcon);
+            } catch (AWTException ex) {
+                System.err.println("Не удалось добавить иконку в трей: " + ex.getMessage());
+            }
+
+            // Кнопка ✕ в titlebar — скрывает окно в трей вместо закрытия
+            closeButton.setOnAction(e -> primaryStage.hide());
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         showLoginScreen();
     }
 

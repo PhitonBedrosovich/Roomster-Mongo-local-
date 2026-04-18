@@ -56,11 +56,22 @@ public class ChatView {
         this.token = token;
         createUI();
         loadAllUsers();
-        // Перерисовываем сообщения при смене темы
+        // Перерисовываем ВСЕ ячейки при смене темы — слушаем root самого чата,
+        // а не сцену (сцена может ещё не быть присвоена при инициализации)
+        root.getStyleClass().addListener(
+                (javafx.collections.ListChangeListener<String>) c -> {
+                    messageList.refresh();
+                    userList.refresh();
+                }
+        );
+        // Дополнительно — слушаем сцену на случай если root сменится
         messageList.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene != null) {
                 newScene.getRoot().getStyleClass().addListener(
-                        (javafx.collections.ListChangeListener<String>) c -> messageList.refresh()
+                        (javafx.collections.ListChangeListener<String>) c -> {
+                            messageList.refresh();
+                            userList.refresh();
+                        }
                 );
             }
         });
@@ -402,9 +413,12 @@ public class ChatView {
             if (item.getUsername() == null) {
                 Label dateLbl = new Label("  " + item.getTimestamp() + "  ");
                 dateLbl.setFont(Font.font("Segoe UI", FontWeight.BOLD, 11));
-                String badgeBg   = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
-                String badgeFg   = isDark ? "#adb5bd" : "#6c757d";
-                String badgeBdr  = isDark ? "#495057" : "#dee2e6";
+
+                // Светлая тема: чёрный текст, тёмная тема: белый текст
+                String badgeFg  = isDark ? "#ffffff" : "#212529";
+                String badgeBg  = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)";
+                String badgeBdr = isDark ? "#6c757d" : "#ced4da";
+
                 dateLbl.setStyle(
                         "-fx-text-fill: " + badgeFg + ";" +
                                 "-fx-background-color: " + badgeBg + ";" +
@@ -414,7 +428,7 @@ public class ChatView {
                                 "-fx-border-width: 1px;" +
                                 "-fx-padding: 2px 12px;"
                 );
-                // Линии по бокам от бейджа
+
                 Region lineL = new Region();
                 Region lineR = new Region();
                 String lineStyle = "-fx-background-color: " + badgeBdr + "; -fx-pref-height: 1px; -fx-max-height: 1px;";

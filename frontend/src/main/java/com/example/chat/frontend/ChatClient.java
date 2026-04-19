@@ -609,12 +609,14 @@ public class ChatClient extends Application {
                                         javax.crypto.SecretKey roomKey = CryptoService.generateAES256Key();
                                         KeyStore.saveRoomKey(room, roomKey);
                                         logger.info("Generated room key for room {} (single participant)", room);
+                                        autoSaveKeystore(currentUser);
                                     } else if (payload.users != null
                                             && payload.users.size() > 1
                                             && KeyStore.hasRoomKey(room)
                                             && keyExchangeHandler != null) {
-                                        // Раздаём ключ всем новым участникам комнаты
+                                        // Раздаём ключ всем участникам комнаты (включая тех кто был до нас)
                                         keyExchangeHandler.distributeRoomKey(room, payload.users);
+                                        autoSaveKeystore(currentUser);
                                     }
                                 } catch (Exception e) {
                                     logger.error("Failed to generate room key on users update", e);
@@ -625,6 +627,7 @@ public class ChatClient extends Application {
                             if (keyExchangeHandler != null) {
                                 try {
                                     keyExchangeHandler.handleKeyExchange(typeProbe);
+                                    autoSaveKeystore(currentUser);
                                 } catch (SecurityException e) {
                                     Platform.runLater(() -> {
                                         Alert alert = new Alert(Alert.AlertType.ERROR);

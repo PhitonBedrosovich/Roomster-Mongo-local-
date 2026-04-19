@@ -1,5 +1,6 @@
 package com.example.chat.controller;
 
+import com.example.chat.config.JwtUtil;
 import com.example.chat.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -14,17 +15,18 @@ import java.util.concurrent.ConcurrentSkipListSet;
 @RequestMapping("/api")
 public class RoomController {
     private static final Logger logger = LoggerFactory.getLogger(RoomController.class);
-    
-    // Потокобезопасное множество комнат
+
     private static final Set<String> rooms = new ConcurrentSkipListSet<>(String.CASE_INSENSITIVE_ORDER);
 
     static {
-        // Добавим стандартные комнаты
-        rooms.addAll(Arrays.asList("General", "Sports", "Music", "Programming", "Gaming", "News"));
+        rooms.addAll(Arrays.asList("Флуд", "Спорт", "Музыка", "Программирование", "Игры", "Новости"));
     }
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private JwtUtil jwtUtil;  // ← сюда, внутрь класса
 
     @GetMapping("/rooms")
     public ResponseEntity<?> getRooms() {
@@ -39,7 +41,6 @@ public class RoomController {
     public ResponseEntity<?> createRoom(@RequestBody Map<String, String> body) {
         String name = body.get("name");
         logger.info("Creating room: {}", name);
-        
         if (name == null || name.trim().isEmpty()) {
             logger.warn("Room creation failed: name is empty");
             return ResponseEntity.badRequest().body("Room name is required");
@@ -57,7 +58,6 @@ public class RoomController {
     @DeleteMapping("/rooms/{roomName}")
     public ResponseEntity<?> deleteRoom(@PathVariable String roomName) {
         logger.info("Deleting room: {}", roomName);
-        
         if (roomName == null || roomName.trim().isEmpty()) {
             logger.warn("Room deletion failed: name is empty");
             return ResponseEntity.badRequest().body("Room name is required");
@@ -72,12 +72,18 @@ public class RoomController {
         return ResponseEntity.ok("Room deleted");
     }
 
-    // Новый endpoint для получения всех пользователей
     @GetMapping("/users")
-    public ResponseEntity<?> getAllUsers() {
+    public ResponseEntity<?> getAllUsers(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        String token = authHeader.substring(7);
+        if (jwtUtil.isTokenExpired(token)) {
+            return ResponseEntity.status(401).body("Token expired");
+        }
         logger.info("Getting list of all users");
         List<String> users = userService.getAllUsernames();
-        logger.debug("Returning {} users", users.size());
         return ResponseEntity.ok(Map.of("users", users));
     }
-} 
+}
